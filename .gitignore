@@ -8,6 +8,7 @@
 settings.json
 communication_guidelines.md
 CLAUDE.md
+presets/
 
 # macOS
 .DS_Store

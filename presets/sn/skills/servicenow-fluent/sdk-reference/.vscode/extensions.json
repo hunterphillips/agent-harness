@@ -1,7 +1,0 @@
-{
-  "recommendations": [
-    "ServiceNow.fluent-language-extension",
-    "dbaeumer.vscode-eslint",
-    "esbenp.prettier-vscode"
-  ]
-}

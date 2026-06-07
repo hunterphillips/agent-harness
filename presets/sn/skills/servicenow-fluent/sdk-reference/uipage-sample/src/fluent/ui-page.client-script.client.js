@@ -1,3 +1,0 @@
-function onSubmit() {
-    return true
-}

@@ -8,3 +8,5 @@ Built for [Claude Code](https://claude.com/claude-code), but portable. Skills fo
 - `agents/` — dispatchable subagents (codebase search, analysis, web research)
 
 To use: copy the contents into your project's `.claude/` directory.
+
+Adapted in part from [humanlayer](https://github.com/humanlayer/humanlayer) and [mattpocock/skills](https://github.com/mattpocock/skills).

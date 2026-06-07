@@ -1,16 +1,13 @@
 # agent-harness
 
-Reusable agent configuration — skills, subagents, and per-stack presets — deployed into other projects' `.claude/` directories. There is no application code; the config files are the product.
+The skills, subagents, and presets I drop into every project I work on. There's no application code here — the config is the product.
 
-Built for [Claude Code](https://claude.com/claude-code), but most of it is portable:
+A skill is a process worth repeating, written down: planning, debugging discipline, code review, getting a design grilled before you commit to it. Small files, plain markdown. Take the ones you want, rewrite the ones that don't fit how you work.
 
-- **Skills** (`skills/`) follow the open [Agent Skills](https://agentskills.io) `SKILL.md` format and are plain-markdown process prompts — usable by any harness that reads the spec, or adaptable to Cursor rules / similar with little work.
-- **Claude Code-specific plumbing**: `agents/` (subagent definitions), `settings.json` (permissions schema), and the `.claude/` deployment target. Porting to another provider means swapping these for that tool's equivalents.
+Built for [Claude Code](https://claude.com/claude-code), but not married to it. Skills follow the open [Agent Skills](https://agentskills.io) format and the bodies are just prompts — any harness that reads the spec can use them. The plumbing is the Claude-specific part: `agents/` holds subagent definitions, and deployment targets a `.claude/` directory. Swap those for your tool's equivalents and the rest travels.
 
-## Layout
+- `skills/` — one folder per skill, `SKILL.md` plus any sub-files it needs
+- `agents/` — dispatchable subagents (codebase search, analysis, web research)
+- `presets/` — overlays for specific stacks, e.g. `sn` for ServiceNow
 
-- `skills/` — one folder per skill (`SKILL.md` + optional sub-files)
-- `agents/` — dispatchable subagent definitions
-- `presets/` — per-stack overlays for specific stacks (e.g. `sn` for ServiceNow)
-
-To use: copy (or rsync) the contents into your project's `./.claude/` directory, overlaying any preset you need.
+To use: copy the contents into your project's `.claude/` directory, overlay a preset if you need one, done.

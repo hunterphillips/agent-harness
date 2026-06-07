@@ -1,0 +1,19 @@
+{
+    "name": "script-action-sample",
+    "version": "0.0.1",
+    "description": "",
+    "license": "UNLICENSED",
+    "scripts": {
+        "build": "now-sdk build",
+        "deploy": "now-sdk install",
+        "transform": "now-sdk transform",
+        "types": "now-sdk dependencies"
+    },
+    "devDependencies": {
+        "@servicenow/glide": "27.0.3",
+        "@servicenow/sdk": "4.2.0",
+        "typescript": "5.8.2",
+        "eslint": "8.50.0",
+        "@servicenow/eslint-plugin-sdk-app-plugin": "4.2.0"
+    }
+}

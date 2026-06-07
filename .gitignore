@@ -1,0 +1,8 @@
+# Local-only reading material and parked/unported skills — never deployed, never committed
+.notes/
+
+# Self-deployed harness copy (rsync output of this repo) and local settings
+.claude/
+
+# macOS
+.DS_Store

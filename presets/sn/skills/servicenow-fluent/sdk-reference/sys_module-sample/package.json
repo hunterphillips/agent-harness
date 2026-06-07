@@ -1,0 +1,17 @@
+{
+    "name": "sys-module-sample",
+    "version": "1.0.0",
+    "description": "",
+    "keywords": [],
+    "author": "ServiceNow",
+    "license": "ISC",
+    "scripts": {
+        "build": "tsc -b && now-sdk build",
+        "dependencies": "now-sdk dependencies"
+    },
+    "devDependencies": {
+        "@servicenow/glide": "27.0.3",
+        "@servicenow/sdk": "4.2.0",
+        "typescript": "5.8.2"
+    }
+}

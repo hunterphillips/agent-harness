@@ -1,0 +1,16 @@
+{
+    "name": "dependencies-sample",
+    "version": "1.0.0",
+    "description": "Application to demonstrate the usage of Dependencies with Now-SDK and Fluent.",
+    "keywords": [],
+    "author": "ServiceNow",
+    "license": "ISC",
+    "scripts": {
+        "build": "now-sdk build",
+        "types": "now-sdk dependencies"
+    },
+    "devDependencies": {
+        "@servicenow/sdk": "4.2.0",
+        "typescript": "5.8.2"
+    }
+}

@@ -11,12 +11,6 @@ Built for [Claude Code](https://claude.com/claude-code), but most of it is porta
 
 - `skills/` — one folder per skill (`SKILL.md` + optional sub-files)
 - `agents/` — dispatchable subagent definitions
-- `presets/` — per-stack overlays applied by name (e.g. `init_claude sn` for ServiceNow)
-- `settings.json` — template/reference only; not deployed
-- `communication_guidelines.md` — deployed alongside the config
+- `presets/` — per-stack overlays for specific stacks (e.g. `sn` for ServiceNow)
 
-## Deployment
-
-`init_claude [preset...]` (a zsh function) rsyncs this repo into the target project's `./.claude/`, excluding `settings.json`, `presets`, `.notes`, and `CLAUDE.md`, then overlays any named presets. Re-running it is the update path; rsync has no `--delete`, so files removed here must be pruned in deployed projects manually.
-
-See `CLAUDE.md` for full conventions (skill authoring rules, artifact regimes, verification checklist).
+To use: copy (or rsync) the contents into your project's `./.claude/` directory, overlaying any preset you need.

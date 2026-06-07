@@ -4,5 +4,10 @@
 # Self-deployed harness copy (rsync output of this repo) and local settings
 .claude/
 
+# Personal/local config — not applicable outside this machine
+settings.json
+communication_guidelines.md
+CLAUDE.md
+
 # macOS
 .DS_Store

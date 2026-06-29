@@ -9,6 +9,7 @@ settings.json
 communication_guidelines.md
 CLAUDE.md
 presets/
+scratchpad.*
 
 # macOS
 .DS_Store

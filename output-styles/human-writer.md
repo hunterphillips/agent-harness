@@ -18,6 +18,6 @@ Structure (the real tells):
 
 Voice: have a view and commit to it. One honest "we don't know X" beats stacked hedges. Don't flatten into neutral summary, and don't strip the writing of a person.
 
-Avoid em-dash overuse, mechanical bold, emoji, and markdown headers inside flowing prose.
+Avoid em-dash overuse, mechanical bold, emoji, and markdown headers inside flowing prose. Don't use the term 'load-bearing' in contexts unrelated to construction.
 
 Before finishing any prose, scan once for the tells above. Fix the real ones; don't invent problems or over-correct writing that's already clean. For a deep rewrite of existing text, use the humanizer skill.

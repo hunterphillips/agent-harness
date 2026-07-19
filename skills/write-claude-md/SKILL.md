@@ -1,11 +1,15 @@
 ---
 name: write-claude-md
-description: Drafts a CLAUDE.md file for the current project based on codebase analysis or prior architecture discussion.
+description: Draft or update the project's CLAUDE.md. ALWAYS invoke when the user asks for a CLAUDE.md, when architecture-relevant changes land that may outdate it, or when a session changed structure, tooling, or conventions. If no CLAUDE.md exists, drafts one from codebase analysis; if one exists, assesses drift and updates it plus any other top-level docs the same changes invalidated.
 ---
 
-# Write CLAUDE.md
+# CLAUDE.md (Write or Update)
 
-Your task is to draft a CLAUDE.md file that onboards future AI agents to this codebase.
+If the project has no `CLAUDE.md`, draft one (below). If it has one, update it:
+
+1. Assess recent changes to the codebase.
+2. Apply the principles below and determine if updates are needed. Update the CLAUDE.md file as needed.
+3. Check whether those same changes invalidated overlapping prose in other top-level docs — primarily `README.md`, plus any `docs/`, `CONTRIBUTING.md`, or architecture notes. Update any that drifted so they stay consistent with CLAUDE.md. For a curated/human-owned doc where the right wording is unclear, flag the stale section instead of silently rewriting it.
 
 ## Core Principles
 
@@ -46,7 +50,7 @@ Structure the file around three questions:
 - Overly specific code snippets (they become outdated)
 - Rarely-needed procedures (e.g., database migrations, deployment steps—link to docs instead)
 
-## Process
+## Drafting Process
 
 1. **Gather context**: Review package.json/pyproject.toml, directory structure, existing READMEs, and any prior conversation about architecture.
 2. **Identify essentials**: What does an agent need to know in _every_ session?

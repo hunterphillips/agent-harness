@@ -6,7 +6,7 @@ Built for [Claude Code](https://claude.com/claude-code), but portable. Skills fo
 
 - `skills/` — one folder per skill, `SKILL.md` plus any sub-files it needs
 - `agents/` — dispatchable subagents (codebase search, analysis, web research)
-- `output-styles/` — the `Human Writer` output style: an always-on, system-prompt-level rule set that keeps Claude's prose free of common AI-writing tells. The `humanizer` skill is its deep-clean, on-demand counterpart.
+- `output-styles/` — the `Human Writer` output style: an always-on, system-prompt-level rule set that keeps Claude's replies direct and concise and its prose free of common AI-writing tells. The `writing` skill is its on-demand counterpart for deliberate prose work (humanizer deep-clean, drafting craft, per-project style guides).
 
 To use: copy the contents into your project's `.claude/` directory. To turn on the `Human Writer` default, set `outputStyle` to `"Human Writer"` in your global `~/.claude/settings.json` (applies everywhere) or run `/config` and select it per project.
 

@@ -1,5 +1,5 @@
 ---
-name: writing-skills
+name: creating-skills
 description: Use when creating new skills, editing existing skills, or verifying skills work before deployment
 ---
 
@@ -412,7 +412,7 @@ Edit skill without testing? Same violation.
 - Don't "adapt" while running tests
 - Delete means delete
 
-**REQUIRED BACKGROUND:** The `tdd` skill explains why this matters. Same principles apply to documentation.
+**REQUIRED BACKGROUND:** The coding router's [tdd workflow](../coding/tdd/tdd.md) explains why this matters. Same principles apply to documentation.
 
 ## Testing All Skill Types
 

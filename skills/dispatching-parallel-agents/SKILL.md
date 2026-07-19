@@ -41,7 +41,7 @@ digraph when_to_use {
 - Understanding requires full system state
 - You don't yet know what's broken (exploratory)
 - Agents would edit the same files / contend for the same resources
-- The work is *plan tasks* needing per-task review (spec + quality) — use the `subagent-driven-development` skill instead (it deliberately runs implementers sequentially)
+- The work is *plan tasks* needing per-task review (spec + quality) — use the coding router's [subagent-driven-development workflow](../coding/subagent-driven-development/subagent-driven-development.md) instead (it deliberately runs implementers sequentially)
 
 ## How to Dispatch (this environment)
 

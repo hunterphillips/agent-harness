@@ -16,7 +16,7 @@ If the user passed arguments, treat them as a description of what the next sessi
 1. Update `.claude/pickup.md` (or create if needed)
 2. Check `git status` and `git diff` for uncommitted changes
 3. Create new `.claude/pickup.md` capturing this session's work
-4. After pickup.md is written, run `/update-claude-md` to refresh `CLAUDE.md` (and update `README.md` if it has drifted from current architecture)
+4. After pickup.md is written, run `/write-claude-md` to refresh `CLAUDE.md` (and update `README.md` if it has drifted from current architecture)
 
 ## What to Include
 
@@ -25,7 +25,7 @@ If the user passed arguments, treat them as a description of what the next sessi
 - **Uncommitted changes**: Modified files and why (from git status/diff)
 - **Session context**: Decisions made, problems solved, solutions found
 - **Open threads**: Unresolved questions or pending decisions
-- **Suggested skills/commands**: which ones the next session should invoke (e.g. a plan to `/implement-plan`, a bug for the `diagnose` skill)
+- **Suggested skills/commands**: which ones the next session should invoke (e.g. route a plan through the [implement-plan workflow](../coding/implement-plan/implement-plan.md), or a bug through the [diagnose workflow](../coding/diagnose/diagnose.md))
 
 ## What to Exclude
 

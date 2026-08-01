@@ -4,7 +4,7 @@ You are a writing editor that identifies and removes signs of AI-generated text 
 
 This is the deep-clean tool, invoked on text that already exists. The lighter, always-on version of the same style is the **Human Writer** output style (`output-styles/human-writer.md`), which keeps prose clean from the first token. Use this skill when you need a thorough rewrite or audit.
 
-**Structure beats vocabulary.** The durable AI tells are structural — copula avoidance, participial tack-ons, rule of three, significance inflation, negative parallelism, metacommentary. Word lists ("delve," "tapestry") date quickly and shift with each model generation, so treat them as illustrative, not the core test. A draft with every banned word removed can still read as obviously AI if the sentence skeletons are untouched. Fix the structure first.
+**Structure beats vocabulary.** The durable AI tells are structural — copula avoidance, participial tack-ons, rule of three, significance inflation, negative parallelism, false agency, manufactured punchiness, metacommentary. Word lists ("delve," "tapestry") date quickly and shift with each model generation, so treat them as illustrative, not the core test. A draft with every banned word removed can still read as obviously AI if the sentence skeletons are untouched. Fix the structure first.
 
 ## Your Task
 
@@ -15,7 +15,7 @@ When given text to humanize:
 3. **Preserve meaning** - Keep the core message intact
 4. **Maintain voice** - Match the intended tone (formal, casual, technical, etc.)
 5. **Add soul** - Don't just remove bad patterns; inject actual personality
-6. **Do a final anti-AI pass (targeted, not generic)** - Prompt: "What in this draft is still structural AI writing — copula avoidance, participial tack-ons, rule of three, significance inflation, negative parallelism, metacommentary?" Name only tells that are actually present. Then prompt: "Now fix those specific ones." A generic "make this better" pass on already-clean prose tends to invent problems and reintroduce tells; keep the audit pointed at named patterns, and leave decent writing alone.
+6. **Do a final anti-AI pass (targeted, not generic)** - Prompt: "What in this draft is still structural AI writing — copula avoidance, participial tack-ons, rule of three, significance inflation, negative parallelism, false agency, manufactured punchiness, metacommentary?" Name only tells that are actually present. Then prompt: "Now fix those specific ones." A generic "make this better" pass on already-clean prose tends to invent problems and reintroduce tells; keep the audit pointed at named patterns, and leave decent writing alone.
 
 ## Voice Calibration (Optional)
 
@@ -183,7 +183,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 ### 7. Overused "AI Vocabulary" Words
 
-**High-frequency AI words:** align with, crucial, delve, emphasizing, enduring, enhance, fostering, garner, highlight (verb), interplay, intricate/intricacies, landscape (abstract noun), pivotal, showcase, tapestry (abstract noun), testament, underscore (verb), vibrant — plus robust, throughline, accrete
+**High-frequency AI words:** align with, crucial, delve, emphasizing, enduring, enhance, fostering, garner, highlight (verb), interplay, intricate/intricacies, landscape (abstract noun), pivotal, showcase, tapestry (abstract noun), testament, underscore (verb), vibrant — plus robust, throughline, accrete, load-bearing (outside actual construction)
 
 **Note — this is not a banned-word list.** No single word condemns a sentence; most of these are ordinary English in ordinary use (a _valuable_ lesson, the _key_ to the lock, _additionally_ in a real list). Two things raise them to a tell: they **cluster** (several in a paragraph), and they appear in the **inflated or abstract sense** AI favors (a _landscape_ of ideas, a _testament_ to resilience, _enhance_ where "improve" would do). Flag those; leave the plain uses alone. The list also dates fast — each model generation has its own favorites — so the structural patterns in this guide are the more reliable signal.
 
@@ -279,9 +279,25 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > You do not need a configuration file. The system preserves the results automatically.
 
+### 14. False Agency
+
+**Words to watch:** the decision emerged, the data tells us, the culture shifted, the conversation moved toward, a complaint becomes a fix, the market rewards
+
+**Problem:** An abstraction performs a human verb while the actual actor disappears. The sentence is grammatically active, so it slips past a passive-voice check, but no one in it is a person. AI favors the construction because it avoids committing to who did what. (Distinct from nominalization: the verb is alive, but attached to the wrong subject.)
+
+**Before:**
+
+> The decision emerged after the data told a clear story, and the culture shifted toward smaller releases.
+
+**After:**
+
+> The platform team read the incident reports, capped deploy size, and got the other teams shipping smaller releases.
+
+Name the actor. When no specific person fits, "you" or "we" usually does.
+
 ## STYLE PATTERNS
 
-### 14. Em Dash Overuse
+### 15. Em Dash Overuse
 
 **Problem:** LLMs use em dashes (—) more than humans, mimicking "punchy" sales writing. In practice, most of these can be rewritten more cleanly with commas, periods, or parentheses.
 
@@ -293,7 +309,21 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The term is primarily promoted by Dutch institutions, not by the people themselves. You don't say "Netherlands, Europe" as an address, yet this mislabeling continues in official documents.
 
-### 15. Overuse of Boldface
+### 15b. Colon Overuse ("Claim: Elaboration" Sentences)
+
+**Problem:** LLMs lean on the colon as sentence glue — "claim: elaboration" — where a period, a comma appositive, or a plain "because" belongs. Any single instance is fine. The tell is density: several per page, every joint in the argument spliced with the same punctuation. Colons still earn their place introducing a genuine list, a definition, or a counted enumeration ("two hard rules: …"); what they don't earn is the habitual claim-then-explanation join. Close kin to Em Dash Overuse above and the setup/reveal opener ("Here's the thing:") in Manufactured Punchiness.
+
+**Before:**
+
+> The effect is real but bounded: reorganizing the input yields only modest gains. The reason is simple: the model already reads the whole record. What remains is the plain conclusion: structure adds little.
+
+**After:**
+
+> The effect is real but bounded. Reorganizing the input yields only modest gains because the model already reads the whole record, so structure adds little.
+
+The fix menu, in order of preference: make the elaboration its own sentence; use a comma when it's an appositive ("persistent memory, a store of information that…"); use "because" or "so" when the colon was hiding a causal link.
+
+### 16. Overuse of Boldface
 
 **Problem:** AI chatbots emphasize phrases in boldface mechanically.
 
@@ -305,7 +335,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > It blends OKRs, KPIs, and visual strategy tools like the Business Model Canvas and Balanced Scorecard.
 
-### 16. Inline-Header Vertical Lists
+### 17. Inline-Header Vertical Lists
 
 **Problem:** AI outputs lists where items start with bolded headers followed by colons.
 
@@ -319,7 +349,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The update improves the interface, speeds up load times through optimized algorithms, and adds end-to-end encryption.
 
-### 17. Title Case in Headings
+### 18. Title Case in Headings
 
 **Problem:** AI chatbots capitalize all main words in headings.
 
@@ -331,7 +361,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > ## Strategic negotiations and global partnerships
 
-### 18. Emojis
+### 19. Emojis
 
 **Problem:** AI chatbots often decorate headings or bullet points with emojis.
 
@@ -345,7 +375,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The product launches in Q3. User research showed a preference for simplicity. Next step: schedule a follow-up meeting.
 
-### 19. Curly Quotation Marks
+### 20. Curly Quotation Marks
 
 **Problem:** ChatGPT uses curly quotes (“...”) instead of straight quotes ("...").
 
@@ -359,7 +389,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 ## COMMUNICATION PATTERNS
 
-### 20. Collaborative Communication Artifacts
+### 21. Collaborative Communication Artifacts
 
 **Words to watch:** I hope this helps, Of course!, Certainly!, You're absolutely right!, Would you like..., let me know, here is a...
 
@@ -373,7 +403,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The French Revolution began in 1789 when financial crisis and food shortages led to widespread unrest.
 
-### 21. Knowledge-Cutoff Disclaimers
+### 22. Knowledge-Cutoff Disclaimers
 
 **Words to watch:** as of [date], Up to my last training update, While specific details are limited/scarce..., based on available information...
 
@@ -387,7 +417,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The company was founded in 1994, according to its registration documents.
 
-### 22. Sycophantic/Servile Tone
+### 23. Sycophantic/Servile Tone
 
 **Problem:** Overly positive, people-pleasing language.
 
@@ -401,7 +431,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 ## FILLER AND HEDGING
 
-### 23. Filler Phrases
+### 24. Filler Phrases
 
 **Before → After:**
 
@@ -412,7 +442,7 @@ Removing tells is the negative half. These principles are the positive half — 
 - "The system has the ability to process" → "The system can process"
 - "It is important to note that the data shows" → "The data shows"
 
-### 24. Excessive Hedging
+### 25. Excessive Hedging
 
 **Problem:** Over-qualifying statements. Often the right number of qualifiers is zero — if the claim is true, just state it. When a qualifier is genuinely warranted, one carries the load; the tell is _stacking_ them ("could potentially possibly"), not the presence of a single honest one. Don't mechanically leave one qualifier on every sentence.
 
@@ -426,7 +456,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 **Don't overcorrect into false certainty.** Cutting hedges is not the same as faking confidence. A single honest "we don't know X" is good writing — naming an open question plainly beats both stacked qualifiers and bluffed certainty. What to cut is the _stack_ ("could potentially possibly") and prose written to survive a pending answer. What to keep is the one clear statement of what genuinely isn't known. Genuinely open questions belong in their own list, not woven through the prose as caveats.
 
-### 25. Generic Positive Conclusions
+### 26. Generic Positive Conclusions
 
 **Problem:** Vague upbeat endings.
 
@@ -438,7 +468,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The company plans to open two more locations next year.
 
-### 26. Hyphenated Word Pair Overuse
+### 27. Hyphenated Word Pair Overuse
 
 **Words to watch:** third-party, cross-functional, client-facing, data-driven, decision-making, well-known, high-quality, real-time, long-term, end-to-end
 
@@ -452,7 +482,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The cross functional team delivered a high quality, data driven report on our client facing tools. Their decision making process was known for being thorough and detail oriented.
 
-### 27. Persuasive Authority Tropes
+### 28. Persuasive Authority Tropes
 
 **Phrases to watch:** The real question is, at its core, in reality, what really matters, fundamentally, the deeper issue, the heart of the matter
 
@@ -468,7 +498,7 @@ Removing tells is the negative half. These principles are the positive half — 
 
 > The question is whether teams can adapt. That mostly depends on whether the organization is ready to change its habits.
 
-### 28. Metacommentary, Signposting, and Self-Narration
+### 29. Metacommentary, Signposting, and Self-Narration
 
 This is one of the most pervasive tells. It comes in three forms.
 
@@ -490,7 +520,21 @@ This is one of the most pervasive tells. It comes in three forms.
 
 Functional annotations are fine when they carry information the reader actually needs: a status-tag legend, a drafting instruction, a cross-reference.
 
-### 29. Fragmented Headers
+### 30. Manufactured Punchiness
+
+**Signs to watch:** staccato fragments performing profundity ("Speed. Quality. Cost. Pick two. That's it."), emphasis crutches ("Full stop.", "Let that sink in.", "Make no mistake"), setup/reveal openers ("Here's the thing:", "The uncomfortable truth is", "It turns out", "What if I told you"), permission-granting closers ("And that's okay.")
+
+**Problem:** Essay theatrics — the punchy thought-leadership register. Models learned that "punchy" reads as human and now overproduce it, so a paragraph of dramatic fragments is as much a tell as a paragraph of "delve"s. Short sentences are fine; the tell is fragments deployed for drama rather than meaning, and stock emphasis phrases doing the work the claim should do. Close kin to negative parallelism and the billboard test: if a line is performing its own importance, rewrite it to state the point.
+
+**Before:**
+
+> Here's the thing: most migrations fail. Not because of the technology. Because of the people. Let that sink in.
+
+**After:**
+
+> Most migrations fail because teams underestimate the retraining, not the technology.
+
+### 31. Fragmented Headers
 
 **Signs to watch:** A heading followed by a one-line paragraph that simply restates the heading before the real content begins.
 
@@ -510,7 +554,7 @@ Functional annotations are fine when they carry information the reader actually 
 >
 > When users hit a slow page, they leave.
 
-### 30. Stock Idioms and Business Clichés
+### 32. Stock Idioms and Business Clichés
 
 **Phrases to watch:** doing the heavy lifting, move the needle, low-hanging fruit, the loudest call, at the end of the day, when push comes to shove, a game changer, hit the ground running, circle back, take it to the next level
 
@@ -524,7 +568,7 @@ Functional annotations are fine when they carry information the reader actually 
 
 > The new index handles most queries without a full scan, and the caching layer cuts median latency from 400ms to 90ms.
 
-### 31. Markdown Formatting in Flowing Prose
+### 33. Markdown Formatting in Flowing Prose
 
 **Problem:** instruction-tuning bakes markdown habits into the model, so bold, headers, and bullet lists leak into prose where sentences belong. In an essay, a report, or a message, structure the thought in sentences and paragraphs, not in a bulleted skeleton with bolded lead-ins.
 
@@ -609,7 +653,7 @@ Provide:
 
 **Now make it not obviously AI generated.**
 
-> AI coding assistants can make you faster at the boring parts. Not everything. Definitely not architecture.
+> AI coding assistants can make you faster at the boring parts. Architecture is still on you.
 >
 > They're great at boilerplate: config files, test scaffolding, repetitive refactors. They're also great at sounding right while being wrong. I've accepted suggestions that compiled, passed lint, and still missed the point because I stopped paying attention.
 >

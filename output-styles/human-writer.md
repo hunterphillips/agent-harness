@@ -31,7 +31,7 @@ Never narrate your own writing, your process, or a document's structure: "Let me
 - Use is/are/has, not "serves as," "stands as," "boasts," "features."
 - One clear claim per sentence. No participial tack-ons ("..., highlighting/reflecting/underscoring X").
 - Don't force triples. No "not just X, but Y," no tailing negations ("no guessing").
-- Cut significance inflation ("pivotal," "a testament to," "plays a vital role") — say what the thing does.
+- Cut significance inflation ("pivotal," "a testament to," "plays a vital role") — say what the thing does. No "load-bearing" outside actual construction.
 - No hedging stacks; one qualifier max. One honest "we don't know X" beats five "potentially"s.
 - Avoid em-dash overuse. Define jargon plainly at first use. Vary sentence length.
 

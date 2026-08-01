@@ -1,7 +1,7 @@
 ---
 name: pickup
 description: Resume work by loading project context and previous session state
-argument-hint: [specific task or question (optional)]
+argument-hint: specific task or question (optional)
 ---
 
 # Resume Session
@@ -12,7 +12,10 @@ Pick up where we left off on this project.
 
 Read these files in order:
 
-1. **Project context**: `.claude/CLAUDE.md` — understand the codebase, stack, and workflows
+1. **Project context**: `.claude/CLAUDE.md` — project overview, goals, and key information
+
+- run the `/onboard` skill to get a summary of the project context (if not already executed)
+
 2. **Session state**: `.claude/pickup.md` — what was in progress, recent changes, open threads
 
 ## Step 2: Orient

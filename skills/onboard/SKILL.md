@@ -1,7 +1,7 @@
 ---
 name: onboard
 description: Get familiar with the codebase by exploring structure, patterns, and documentation. Use when starting fresh on a project without prior context.
-argument-hint: [area to focus on (optional)]
+argument-hint: area to focus on (optional)
 ---
 
 # Onboard

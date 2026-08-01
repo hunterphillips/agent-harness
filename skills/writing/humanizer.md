@@ -456,6 +456,8 @@ The fix menu, in order of preference: make the elaboration its own sentence; use
 
 **Don't overcorrect into false certainty.** Cutting hedges is not the same as faking confidence. A single honest "we don't know X" is good writing — naming an open question plainly beats both stacked qualifiers and bluffed certainty. What to cut is the _stack_ ("could potentially possibly") and prose written to survive a pending answer. What to keep is the one clear statement of what genuinely isn't known. Genuinely open questions belong in their own list, not woven through the prose as caveats.
 
+**Preserve modality when rewriting.** A deleted qualifier must not change what the sentence asserts. "Could shift" is not "likely moves"; "an enabling condition" is not "the cause"; "I owned every review" is not "I decided every line." Some qualifiers carry the claim's actual strength — removing those is an accuracy error wearing a style fix's clothes. Blind-eval evidence bears this out: styled rewrites lost calibration judgments precisely by firming up claims their sources stated more carefully. Punchiness comes from cutting filler, never from promoting the verb.
+
 ### 26. Generic Positive Conclusions
 
 **Problem:** Vague upbeat endings.

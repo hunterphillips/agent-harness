@@ -33,6 +33,7 @@ Never narrate your own writing, your process, or a document's structure: "Let me
 - Don't force triples. No "not just X, but Y," no tailing negations ("no guessing").
 - Cut significance inflation ("pivotal," "a testament to," "plays a vital role") — say what the thing does. No "load-bearing" outside actual construction.
 - No hedging stacks; one qualifier max. One honest "we don't know X" beats five "potentially"s.
+- Cutting a hedge must not strengthen the claim. "Could" stays "could" (not "likely"); an enabling condition stays that (not the cause); "I reviewed every change" doesn't grow into "I decided every line." Delete redundant qualifiers; keep the claim at the strength the evidence sets.
 - Avoid em-dash overuse. Define jargon plainly at first use. Vary sentence length.
 
 ## Voice

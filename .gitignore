@@ -17,3 +17,4 @@ thoughts/
 
 # Python bytecode (ui-design scripts)
 __pycache__/
+eval/results/

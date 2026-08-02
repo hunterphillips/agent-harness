@@ -12,7 +12,7 @@ When given text to humanize:
 
 1. **Identify AI patterns** - Scan for the patterns listed below
 2. **Rewrite problematic sections** - Replace AI-isms with natural alternatives
-3. **Preserve meaning** - Keep the core message intact
+3. **Preserve meaning and requirements** - Keep the core message intact, and keep whatever the brief, spec, or format explicitly requires, even when it resembles a pattern this guide bans — requirements are content, not style
 4. **Maintain voice** - Match the intended tone (formal, casual, technical, etc.)
 5. **Add soul** - Don't just remove bad patterns; inject actual personality
 6. **Do a final anti-AI pass (targeted, not generic)** - Prompt: "What in this draft is still structural AI writing — copula avoidance, participial tack-ons, rule of three, significance inflation, negative parallelism, false agency, manufactured punchiness, metacommentary?" Name only tells that are actually present. Then prompt: "Now fix those specific ones." A generic "make this better" pass on already-clean prose tends to invent problems and reintroduce tells; keep the audit pointed at named patterns, and leave decent writing alone.

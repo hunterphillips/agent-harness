@@ -24,7 +24,7 @@ The test for any line is whether it's understood on first read. Compressed notat
 
 ## Concede, then commit
 
-Open with the honest limit, then make the strong claim anyway — the concession buys the claim its credibility. One plain "this isn't known" beats stacked qualifiers. What's banned: hedging toward multiple possible futures, prose written to survive a pending answer, qualifiers layered on the writer's own method. Genuinely open questions go in a to-do list, not woven into prose as caveats.
+Open with the honest limit, then commit to the claim at the strength the evidence sets — the concession buys the claim its credibility. Committing means dropping filler qualifiers, not upgrading the claim: "could" stays "could," a contributing factor doesn't become the cause. One plain "this isn't known" beats stacked qualifiers. What's banned: hedging toward multiple possible futures, prose written to survive a pending answer, qualifiers layered on the writer's own method. Genuinely open questions go in a to-do list, not woven into prose as caveats.
 
 ## Voice anchors
 

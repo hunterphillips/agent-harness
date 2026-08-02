@@ -239,11 +239,14 @@ def deploy_configuration(workspace: Path) -> None:
     )
 
 
-def make_agent_prompt(task: Task) -> str:
+def make_agent_prompt(task: Task, arm: str) -> str:
     if task.battery == "writing":
         source = f"\n\nSOURCE MATERIAL\n{task.source}" if task.source else ""
+        # The configured arm invokes the writing skill explicitly, mirroring how
+        # the user actually works (/writing …). Control has no skills to invoke.
+        prefix = "/writing\n" if arm == "configured" else ""
         return (
-            "Complete the writing task below. Return only the requested final deliverable; "
+            f"{prefix}Complete the writing task below. Return only the requested final deliverable; "
             "do not describe your process.\n\n"
             f"TASK\n{task.prompt}{source}"
         )
@@ -383,7 +386,7 @@ def run_arm(task: Task, replicate: int, arm: str) -> dict[str, Any]:
         if arm == "control":
             args.append("--safe-mode")
         completed, wall_duration_ms = run_command(
-            args, cwd=workspace, input_text=make_agent_prompt(task)
+            args, cwd=workspace, input_text=make_agent_prompt(task, arm)
         )
         parse_error: str | None = None
         try:

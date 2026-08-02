@@ -5,7 +5,7 @@ weight: 1.0
 ---
 ## Task Prompt
 
-Build the content for a five-slide end-of-term presentation titled around the student's individual contributions to a team project. For each slide: a title that states a point (a claim, not a topic label), at most four short bullets, and a one-sentence speaker note. The audience is the professor and classmates who know the project but not who did what. The numbers in the notes must appear in the deck. No agenda slide, no filler.
+Build the content for a five-slide end-of-term presentation titled around the student's individual contributions to a team project. For each slide: a title that states a point (a claim, not a topic label), at most four short bullets, and a one-sentence speaker note. The audience is the professor and classmates who know the project but not who did what. The numbers in the notes must appear somewhere in the deck content — a bullet or a speaker note both count. No agenda slide, no filler.
 
 ## Fixed Source Input
 

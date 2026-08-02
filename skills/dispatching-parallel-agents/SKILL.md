@@ -1,6 +1,6 @@
 ---
 name: dispatching-parallel-agents
-description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
+description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies, or before launching/fanning out multiple subagents in parallel for any reason
 ---
 
 # Dispatching Parallel Agents
@@ -48,6 +48,7 @@ digraph when_to_use {
 Parallelism = multiple `Agent` calls **in a single message**. Calls in the same message run concurrently; calls in separate messages run sequentially.
 
 - **`subagent_type`** — pick the right agent: `general-purpose` for fix/implement tasks; `Explore`, `codebase-locator`, or `codebase-analyzer` for read-only investigation.
+- **`model`** — with N agents, the per-agent tier is an N× cost decision; choose it deliberately rather than inheriting the session model by default. Default to `opus`; use `sonnet` for mechanical work (reformatting, bulk transforms, sweeping greps). Extraction/note-taking/digestion is **not** mechanical — its quality caps everything built on it downstream.
 - **`isolation: "worktree"`** — give each *editing* agent its own git worktree so concurrent writes can't clobber each other. Use whenever agents touch overlapping paths.
 - **`run_in_background: true`** — for long agents you want to monitor while continuing other work.
 
@@ -92,6 +93,7 @@ Return: root cause + exact changes made.
 | "Fix the race condition" (no context) | Paste error messages + test names |
 | No constraints (agent refactors everything) | "Fix tests only, don't touch prod code" |
 | "Fix it" (vague output) | "Return root cause + summary of changes" |
+| 7 readers silently inherit the session model | Tier chosen per fan-out: `opus` default, `sonnet` for mechanical |
 
 ## Verification (after agents return)
 

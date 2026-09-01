@@ -40,7 +40,6 @@ Check for and read these files (in order of priority):
 ```bash
 # Project-specific Claude instructions
 cat .claude/CLAUDE.md 2>/dev/null
-cat .claude/communication_guidelines.md 2>/dev/null
 
 # Standard project docs
 cat README.md 2>/dev/null

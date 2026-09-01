@@ -1,40 +1,44 @@
 ---
 name: pickup
-description: Resume work by loading project context and previous session state
-argument-hint: specific task or question (optional)
+description: Resume a thread of work at session start — when the user says "pickup", "resume", "continue where we left off", or names past work to restart — instead of reconstructing context by hand
+argument-hint: [lane, or plain-language description of the work to resume (optional)]
 ---
 
 # Resume Session
 
-Pick up where we left off on this project.
+Pick up a lane — a durable thread of work whose state lives at `thoughts/shared/lanes/<lane-name>/` (written by `/handoff`).
 
-## Step 1: Load Context
+## Step 1: Load Project Context
 
-Read these files in order:
+Read `.claude/CLAUDE.md`; run `/onboard` first if this session has no project context yet.
 
-1. **Project context**: `.claude/CLAUDE.md` — project overview, goals, and key information
+## Step 2: Resolve the Lane
 
-- run the `/onboard` skill to get a summary of the project context (if not already executed)
+List `thoughts/shared/lanes/` and read each `handoff.md` frontmatter (`lane`, `description`, `updated`).
 
-2. **Session state**: `.claude/pickup.md` — what was in progress, recent changes, open threads
+- **Argument given**: match it against lane names and descriptions **semantically** — the user won't know exact lane names. "the frontend refactor work" resolves to a lane described as "components, styling, UX flows". Peek at candidates' handoff bodies if descriptions don't settle it (resolution reads are exempt from Step 3's scoping, which applies after resolution). **State the resolution before proceeding** ("picking up **ui** — Frontend look/feel") so a wrong match is caught immediately. Genuinely ambiguous → ask, showing the candidates.
+- **No argument**: list lanes as one-liners — name · description · updated date · headline next step — and ask which to pick up.
 
-## Step 2: Orient
+**Fallbacks**: no `lanes/` directory but `.claude/pickup.md` exists → read that instead (legacy format; the next `/handoff` migrates it, leaving a `.migrated` rename behind as the marker). Neither exists → say so and ask what to work on.
 
-After reading, briefly confirm:
+## Step 3: Load Lane State
 
-- What was being worked on
-- Current status (complete, in progress, blocked)
-- Any uncommitted changes or pending decisions
+Read ONLY the resolved lane's files:
 
-## Step 3: Continue
+1. `handoff.md` — current state, decisions, next steps
+2. `inbox.md` (if present) — items queued for this lane by the user or other sessions. Surface them explicitly at pickup; later, once an item is absorbed into the session's work (or deliberately declined), remove it from `inbox.md`, confirming first. An emptied inbox.md is deleted.
+
+Do not load other lanes' state into context — lane-scoped context is the point (the frontmatter scans during resolution don't count).
+
+## Step 4: Orient and Continue
+
+Briefly confirm: what this lane was working on, its status, uncommitted changes or pending decisions. Then act on the user's request:
 
 $ARGUMENTS
 
-If no specific task provided, ask what to focus on next based on the pickup context.
+If the argument only identified the lane (no task in it), ask what to focus on, informed by the lane's Next section and inbox.
 
 ## Tools Available
-
-Use these agents as needed to investigate the codebase:
 
 - `@.claude/agents/codebase-analyzer.md` — understand how code works
 - `@.claude/agents/codebase-locator.md` — find relevant files and components
@@ -42,6 +46,5 @@ Use these agents as needed to investigate the codebase:
 ## Guidelines
 
 - Don't re-explain project basics already covered in CLAUDE.md
-- Reference pickup.md context naturally, don't recite it back verbatim
-- If pickup.md is missing or empty, note this and ask for direction
-- Prioritize continuity—pick up the thread, don't start fresh
+- Reference lane context naturally; don't recite the handoff back verbatim
+- Prioritize continuity — pick up the thread, don't start fresh

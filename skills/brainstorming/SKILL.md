@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: Turn a vague idea into a concrete, validated plan through collaborative dialogue — any domain: projects, research directions, content, decisions, events, purchases. ALWAYS invoke when the user floats a fuzzy idea ("I'm thinking about…", "what if we…", "help me think through…") and wants it developed — do not jump straight to a finished proposal. For software/dev ideas, invoke coding instead; its brainstorming workflow feeds the delivery pipeline.
+description: "Turn a vague idea into a concrete, validated plan through collaborative dialogue — any domain: projects, research directions, content, decisions, events, purchases. ALWAYS invoke when the user floats a fuzzy idea (\"I'm thinking about…\", \"what if we…\", \"help me think through…\") and wants it developed — do not jump straight to a finished proposal. For software/dev ideas, invoke coding instead; its brainstorming workflow feeds the delivery pipeline."
 ---
 
 # Brainstorming Ideas Into Plans

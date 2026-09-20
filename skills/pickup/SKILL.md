@@ -17,7 +17,7 @@ Read `.claude/CLAUDE.md`; run `/onboard` first if this session has no project co
 List `thoughts/shared/lanes/` and read each `handoff.md` frontmatter (`lane`, `description`, `updated`).
 
 - **Argument given**: match it against lane names and descriptions **semantically** — the user won't know exact lane names. "the frontend refactor work" resolves to a lane described as "components, styling, UX flows". Peek at candidates' handoff bodies if descriptions don't settle it (resolution reads are exempt from Step 3's scoping, which applies after resolution). **State the resolution before proceeding** ("picking up **ui** — Frontend look/feel") so a wrong match is caught immediately. Genuinely ambiguous → ask, showing the candidates.
-- **No argument**: list lanes as one-liners — name · description · updated date · headline next step — and ask which to pick up.
+- **No argument**: list lanes as one-liners — name · description · updated date · headline next step — plus a count of backlog tickets (Step 3.3) if any exist, and ask which to pick up.
 
 **Fallbacks**: no `lanes/` directory but `.claude/pickup.md` exists → read that instead (legacy format; the next `/handoff` migrates it, leaving a `.migrated` rename behind as the marker). Neither exists → say so and ask what to work on.
 
@@ -27,6 +27,7 @@ Read ONLY the resolved lane's files:
 
 1. `handoff.md` — current state, decisions, next steps
 2. `inbox.md` (if present) — items queued for this lane by the user or other sessions. Surface them explicitly at pickup; later, once an item is absorbed into the session's work (or deliberately declined), remove it from `inbox.md`, confirming first. An emptied inbox.md is deleted.
+3. **Backlog tickets** — `thoughts/shared/tickets/*.md` with `status: backlog` in frontmatter, project-wide (not lane-scoped). Discrete work items waiting for a session: written by other sessions, by `to-issues`, or routed in from the second-brain drain (those carry `source:` pointing at the vault inbox capture and `routed_to:` listing every project that received it — the item may only partly concern this project). List them as one-liners (date · title · area) alongside the inbox; don't load bodies until one is chosen. Taking one up sets `status: in-progress` (then `done`); one that doesn't belong here gets `status: declined` with a one-line reason, never deleted.
 
 Do not load other lanes' state into context — lane-scoped context is the point (the frontmatter scans during resolution don't count).
 

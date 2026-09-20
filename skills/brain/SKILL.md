@@ -77,7 +77,28 @@ Distill unprocessed captures into durable notes. (Mid-session captures are disti
    narrative. Bump `updated`, set `refreshed` to the capture's `captured:`
    timestamp (the next gather starts from that instant), mark
    the capture processed. Never pull in anything that isn't in the packet.
-9. One commit: `brain: drain inbox (N items)`. Summarize what went where.
+9. **Project-bound captures route to the project.** The registry is
+   `notes/projects/*.md` with `repo:` — the first path is the target repo,
+   `aliases:` lists the words that identify it. Decide the target(s):
+   - a leading `<name>:` matching a project note's stem or alias pins it
+     (`cfo: …`, `focus: …`); several may be stacked (`cfo: focus: …`);
+   - a leading `project:` means "this is for a project, find which" — the
+     capture never lands in vault `notes/`;
+   - no prefix: still route when the body names a project or one of its
+     aliases. Vault material by shape (a fact about Hunter's world, a list
+     item, a priority) stays in `notes/` even if it mentions a project.
+   Route by writing the capture **verbatim** as
+   `<repo>/thoughts/shared/tickets/YYYY-MM-DD-<slug>.md` in every target,
+   frontmatter `created`, `status: backlog`, `area: routed capture`,
+   `source: <vault inbox path>`, `captured:`, `trust:`, `routed_to: [stems]`.
+   `thoughts/` is gitignored everywhere, so no commit in the other repo.
+   Mark the inbox file processed; name the target(s) in the commit message.
+   A capture that is *also* vault material gets its vault distillation too.
+   **Headless drain routes only on a name or alias match** — an unnamed
+   project-flavored capture, or a `project:` capture that names nothing
+   known, gets `needs-context: true` and waits; interactive drain asks.
+   Never guess a target.
+10. One commit: `brain: drain inbox (N items)`. Summarize what went where.
 
 An item whose meaning or target project is ambiguous: in an interactive session, ask Hunter. In a headless/scheduled run, don't guess — add `needs-context: true` to its frontmatter and leave it unprocessed; a later interactive drain clears the flag by asking. (A nightly launchd job runs drain automatically when unflagged unprocessed items exist; monthly, an audit writes findings to `log/audit-YYYY-MM.md`.)
 

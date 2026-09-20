@@ -74,7 +74,8 @@ Distill unprocessed captures into durable notes. (Mid-session captures are disti
    lines, same discipline. Nothing outside the block or bullet changes; if
    the packet contradicts narrative above the block, add a
    `#contradiction` line inside the block instead of editing the
-   narrative. Bump `updated`, set `refreshed` to the capture's date, mark
+   narrative. Bump `updated`, set `refreshed` to the capture's `captured:`
+   timestamp (the next gather starts from that instant), mark
    the capture processed. Never pull in anything that isn't in the packet.
 9. One commit: `brain: drain inbox (N items)`. Summarize what went where.
 

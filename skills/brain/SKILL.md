@@ -63,7 +63,20 @@ Distill unprocessed captures into durable notes. (Mid-session captures are disti
    Headless drain: flag `needs-context: true` and leave it. Operational
    family facts (names, dates, obligations) are vault material —
    `notes/household.md` (shape-over-source ruling).
-8. One commit: `brain: drain inbox (N items)`. Summarize what went where.
+8. **Project-status captures** (`kind: project-status`, written nightly by
+   `bin/brain-refresh` from lane handoffs and git log): rewrite only the
+   block between `<!-- status:auto -->` and `<!-- /status:auto -->` in
+   `notes/projects/<project>.md` (the `project:` key names the file) and
+   that project's bullet in `notes/projects-overview.md`. The block: 3–8
+   lines, current state then next step, every claim dated and attributed
+   to its lane handoff or commits ("per `core` handoff 09-19", "commits
+   09-18→19"). Hedges in the handoff stay hedges. The overview bullet: ≤3
+   lines, same discipline. Nothing outside the block or bullet changes; if
+   the packet contradicts narrative above the block, add a
+   `#contradiction` line inside the block instead of editing the
+   narrative. Bump `updated`, set `refreshed` to the capture's date, mark
+   the capture processed. Never pull in anything that isn't in the packet.
+9. One commit: `brain: drain inbox (N items)`. Summarize what went where.
 
 An item whose meaning or target project is ambiguous: in an interactive session, ask Hunter. In a headless/scheduled run, don't guess — add `needs-context: true` to its frontmatter and leave it unprocessed; a later interactive drain clears the flag by asking. (A nightly launchd job runs drain automatically when unflagged unprocessed items exist; monthly, an audit writes findings to `log/audit-YYYY-MM.md`.)
 

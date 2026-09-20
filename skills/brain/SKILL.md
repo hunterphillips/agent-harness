@@ -7,7 +7,7 @@ description: Hunter's second brain at ~/workspace/second-brain. Use for /brain �
 
 Vault: `~/workspace/second-brain` (git repo). Its root `CLAUDE.md` is the authority on structure and write rules; read it if you haven't this session. Every mode ends with a git commit prefixed `brain:`.
 
-Dispatch on the argument: `drain`, `audit`, `recall <topic>` — anything else is a capture.
+Dispatch on the argument: `drain`, `audit`, `recall <topic>`, `learn <urls or pasted text>` — anything else is a capture. A pasted article or a URL with "save this / take notes on this" is Learn, not Capture.
 
 ## Capture (default): `/brain <text>`
 
@@ -51,7 +51,19 @@ Distill unprocessed captures into durable notes. (Mid-session captures are disti
    silently overwrite — record both claims and mark the line with
    `#contradiction` so it surfaces at read time, not just at the monthly
    audit.
-6. One commit: `brain: drain inbox (N items)`. Summarize what went where.
+6. **Keep the hedge**: a "maybe", "probably", "I think" in the capture
+   stays that strength in the note. Distilling never upgrades a guess to a
+   fact, and re-touching a note never firms up an earlier hedge.
+7. **Profile-shaped captures go to personal-context, not `notes/`**: a
+   capture that says something *about* Hunter (a trait, a value, a
+   self-assessment, how he works) is not vault material. Interactive drain:
+   write it verbatim as a proposal to
+   `~/workspace/personal-context/proposals/<date>-second-brain-<slug>.md`,
+   set `processed: true`, and note the pointer in the commit message.
+   Headless drain: flag `needs-context: true` and leave it. Operational
+   family facts (names, dates, obligations) are vault material —
+   `notes/household.md` (shape-over-source ruling).
+8. One commit: `brain: drain inbox (N items)`. Summarize what went where.
 
 An item whose meaning or target project is ambiguous: in an interactive session, ask Hunter. In a headless/scheduled run, don't guess — add `needs-context: true` to its frontmatter and leave it unprocessed; a later interactive drain clears the flag by asking. (A nightly launchd job runs drain automatically when unflagged unprocessed items exist; monthly, an audit writes findings to `log/audit-YYYY-MM.md`.)
 
@@ -71,6 +83,16 @@ the system lane's business, checked on demand, not monthly). Scan for:
 - `log/` entries whose durable content never made it into `notes/`
   (episodic → semantic consolidation candidates)
 - `#contradiction` markers still unresolved in `notes/`
+- **drift, not just age**: pick a sample of notes touched since the last
+  audit, read the inbox capture(s) named in their `source:`, and flag any
+  claim that is stronger, broader, or different from what the capture
+  actually said (a hedge that became a fact, a detail the capture doesn't
+  contain)
+- profile-shaped facts that leaked into `notes/` (traits, values,
+  self-assessments — belongs in personal-context; flag for a proposal)
+
+No profile lookup is part of the audit or the drain: both work on the
+shape and provenance of notes, not on who Hunter is (decision 2026-09-19).
 
 Write findings as a `- [ ]` checklist with file paths — the audit file IS
 the review queue. Before writing, read the previous month's audit file and
@@ -81,9 +103,45 @@ supervised review checks items off in place.
 
 ## Recall: `/brain recall <topic>`
 
+0. **Route first.** A question about who Hunter *is* (traits, values,
+   history, how he works, what he believes) goes to the `ask-profile` skill
+   with caller `second-brain` — don't grep the vault for it, it isn't
+   here. A question about his *world* (projects, priorities, household,
+   saved lists, what he's learned) is answered from the vault. Mixed
+   questions: do both, keep the sources separate in the answer.
 1. Grep the vault (skip `.obsidian/`), follow `[[wikilinks]]` from hits.
 2. Prefer `notes/` (durable) over `inbox/` (raw) and `log/` (point-in-time); check dates on anything time-sensitive.
 3. Summarize with file references.
+
+## Learn: `/brain learn <urls or pasted text>`
+
+Study notes — something Hunter read or researched, filed by topic in
+`notes/learning/<topic>.md` (vault write rule 10). Sources are external
+content; the note is his synthesis.
+
+1. **Delegate the reading.** Never scan or summarize a source in the main
+   session. Spawn one `general-purpose` subagent — `sonnet` for a single
+   source, `opus` when several sources must be merged — with this brief:
+   - For each source: fetch the full text (`web_fetch_exa` or `curl`; for
+     pasted text, use it as given) and write it raw to
+     `inbox/import/YYYY-MM-DD-<slug>.md` with frontmatter `captured`,
+     `source: <url or "pasted">`, `title`, `trust: external`,
+     `kind: learning`, `processed: false`. Body verbatim.
+   - Return: the topic (one or two words, kebab-case, matching an existing
+     `notes/learning/` file if one fits), the core insights across all
+     sources with redundancy removed (each insight once, attributed to
+     which source(s) said it), and one line per source for the Sources list.
+2. **Merge, don't paste.** Grep `notes/learning/` for the topic; update
+   beats create. Frontmatter: `created`, `updated`, `kind: learning`,
+   `trust: derived`, `sources` (the import files). Body is a synthesis that
+   reads as one note, not a stack of summaries — fold new insights into
+   existing sections, add a section only for a genuinely new sub-topic. End
+   with `## Sources` — one bullet per source: URL · date read · one-line
+   takeaway. Anything Hunter said about the source in his own words goes in
+   as his (`trust: self` on a capture if he wants it kept verbatim).
+3. Set `processed: true` on the import file(s). Commit
+   `brain: learn <topic> (<N> sources)`. Reply with the topic file path and
+   the three or four insights that actually changed the note.
 
 ## Discretionary writes (no /brain invocation)
 

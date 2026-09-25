@@ -7,7 +7,7 @@ description: Draft or update the project's CLAUDE.md. ALWAYS invoke when the use
 
 If the project has no `CLAUDE.md`, draft one (below). If it has one, update it:
 
-1. Assess recent changes to the codebase.
+1. Assess what changed since the doc was last touched — from the tree, not from session memory: run `git log --oneline --since="$(git log -1 --format=%cI -- CLAUDE.md)"` (or use the file's mtime if CLAUDE.md is untracked), and for every count or name list the doc makes (directories, skills, agents, commands), `ls` the real thing and compare. Drift usually comes from sessions that never ran this skill, so the doc's own claims are the checklist.
 2. Apply the principles below and determine if updates are needed. Update the CLAUDE.md file as needed.
 3. Check whether those same changes invalidated overlapping prose in other top-level docs — primarily `README.md`, plus any `docs/`, `CONTRIBUTING.md`, or architecture notes. Update any that drifted so they stay consistent with CLAUDE.md. For a curated/human-owned doc where the right wording is unclear, flag the stale section instead of silently rewriting it.
 

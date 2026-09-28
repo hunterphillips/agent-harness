@@ -27,6 +27,8 @@ no additional undocumented sources were added.
 | write-claude-md | /Users/hunterphillips/workspace/Claude/skills/write-claude-md |
 | writing | /Users/hunterphillips/workspace/Claude/skills/writing |
 
+Set as of the 2026-09-22 run. `pdf-extract` was removed from the harness on 2026-09-27; a rebuild starts from 12 harness skills.
+
 ## Distractors (27)
 
 ### claude.ai-synced Anthropic skills (9) — from `~/.claude/skills/synced/2cba75ad-d6e9-4d45-829f-34cade2f6695_edf59a0e-fd30-4c9b-b3c8-8b73aa406971/`

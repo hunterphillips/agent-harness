@@ -3,15 +3,26 @@
 # CLAUDE_CODE_OAUTH_TOKEN secret, and write the caller workflow that delegates
 # to the reusable jobs in hunterphillips/agent-harness.
 #
-# Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push]
+# Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement]
+#
+# --no-implement enrolls for triage and monitoring only (no ready-for-agent job);
+# cfo uses this until its unattended-host rule is revisited.
 #
 # The token comes from $CLAUDE_CODE_OAUTH_TOKEN if set, otherwise you are
 # prompted (generate one with `claude setup-token`). Pass --no-push to write the
 # workflow without committing it.
 set -euo pipefail
 
-repo_path="${1:?usage: enroll-repo.sh <path-to-local-clone> [--no-push]}"
-push=1; [[ "${2:-}" == "--no-push" ]] && push=0
+repo_path="${1:?usage: enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement]}"
+shift
+push=1; implement=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-push) push=0 ;;
+    --no-implement) implement=0 ;;
+    *) echo "unknown flag: $arg" >&2; exit 2 ;;
+  esac
+done
 cd "$repo_path"
 
 slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
@@ -54,7 +65,7 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   [[ "$(basename "$wf")" == "factory-caller.yml" ]] && continue
   n=$(sed -n 's/^name:[[:space:]]*//p' "$wf" | head -1 | tr -d '"'"'"'')
   [[ -n "$n" ]] || n=$(basename "$wf" | sed 's/\.ya\?ml$//')
-  [[ "$n" == "factory" ]] && continue
+  [[ "$n" == "factory" || "$n" == "factory-jobs" ]] && continue   # the caller and the reusable jobs
   names+=("$n")
 done
 
@@ -66,7 +77,7 @@ cat <<'YAML'
 name: factory
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
 YAML
 if (( ${#names[@]} )); then
   echo "  workflow_run:"
@@ -108,8 +119,24 @@ cat <<'YAML'
     secrets: inherit
 YAML
 fi
+if (( implement )); then
+cat <<'YAML'
+  implement:
+    if: >-
+      github.event_name == 'issues' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'ready-for-agent' &&
+      github.actor != 'claude[bot]'
+    uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
+    with:
+      job: implement
+      model: claude-opus-5-5
+      issue_number: ${{ github.event.issue.number }}
+    secrets: inherit
+YAML
+fi
 } > .github/workflows/factory-caller.yml
-echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none})"
+echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none}; implement job: $implement)"
 
 if (( push )); then
   git add .github/workflows/factory-caller.yml

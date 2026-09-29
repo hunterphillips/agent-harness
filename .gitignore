@@ -1,5 +1,6 @@
 # Local-only reading material and parked/unported skills — never deployed, never committed
 .notes/
+.env.local
 
 # Local session state; the skills/agents symlinks are committed so a cloud clone self-loads the harness
 .claude/*

@@ -149,6 +149,7 @@ if (( push )); then
     echo "  caller unchanged; nothing to commit"
   else
     git commit -q -m "Factory caller workflow (enroll-repo.sh)" -- .github/workflows/factory-caller.yml
+    git pull -q --rebase --autostash || { echo "  rebase failed; resolve and push manually" >&2; exit 1; }
     git push -q
     echo "  committed and pushed"
   fi

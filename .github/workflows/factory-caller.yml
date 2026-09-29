@@ -1,0 +1,19 @@
+# Factory caller: delegates to the reusable jobs in hunterphillips/agent-harness.
+# Written by scripts/enroll-repo.sh in that repo; edit there, re-run to refresh.
+name: factory
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  id-token: write
+jobs:
+  triage:
+    if: github.event.action == 'opened' && github.actor != 'claude[bot]'
+    uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
+    with:
+      job: triage
+      issue_number: ${{ github.event.issue.number }}
+    secrets: inherit

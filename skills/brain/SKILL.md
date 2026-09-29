@@ -87,11 +87,22 @@ Distill unprocessed captures into durable notes. (Mid-session captures are disti
    - no prefix: still route when the body names a project or one of its
      aliases. Vault material by shape (a fact about Hunter's world, a list
      item, a priority) stays in `notes/` even if it mentions a project.
-   Route by writing the capture **verbatim** as
-   `<repo>/thoughts/shared/tickets/YYYY-MM-DD-<slug>.md` in every target,
-   frontmatter `created`, `status: backlog`, `area: routed capture`,
-   `source: <vault inbox path>`, `captured:`, `trust:`, `routed_to: [stems]`.
-   `thoughts/` is gitignored everywhere, so no commit in the other repo.
+   Route by tracker mode, decided per target repo the way
+   `coding/to-issues/tracker-conventions.md` does (`git -C <repo> remote -v`
+   names GitHub and `gh auth status` succeeds → GitHub mode; else local):
+   - **GitHub mode**: create an issue in that repo with the capture
+     **verbatim** as the body, title = the capture's first line (trimmed to
+     ~70 chars), label `needs-triage` (create the label first if missing;
+     the tracker conventions have the idempotent block), and a footer:
+     `source: <vault inbox path>` · `captured: <ts>` · `trust: <value>` ·
+     `routed_to: [stems]`. `gh issue create -R <owner/repo> --title … --label
+     needs-triage --body-file -` with a heredoc. Record the issue URL in the
+     inbox file's frontmatter as `routed_issue:`.
+   - **Local mode**: write the capture **verbatim** as
+     `<repo>/thoughts/shared/tickets/YYYY-MM-DD-<slug>.md`, frontmatter
+     `created`, `status: backlog`, `area: routed capture`, `source: <vault
+     inbox path>`, `captured:`, `trust:`, `routed_to: [stems]`. `thoughts/`
+     is gitignored everywhere, so no commit in the other repo.
    Mark the inbox file processed; name the target(s) in the commit message.
    A capture that is *also* vault material gets its vault distillation too.
    **Headless drain routes only on a name or alias match** — an unnamed

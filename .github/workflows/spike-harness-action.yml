@@ -26,4 +26,5 @@ jobs:
             3. Find the installed plugin on disk (`ls ~/.claude/plugins; find ~/.claude/plugins -maxdepth 4 -name SKILL.md | head`) and confirm `skills/coding/create-plan/plan-template.md` exists next to the router; quote its first line.
             4. Run `which gh; gh auth status 2>&1; gh api user --jq .login 2>&1; env | grep -iE 'claude|otel' | sed 's/=.*/=<redacted>/'` and report.
             Print the full report, including command outputs, as your final message.
-          claude_args: "--max-turns 20"
+          show_full_output: true
+          claude_args: "--max-turns 20 --allowedTools Bash,Read,Glob,Grep,Skill"

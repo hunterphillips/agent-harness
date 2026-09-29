@@ -144,7 +144,7 @@ fi
 echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none}; implement job: $implement)"
 
 if (( push )); then
-  git add .github/workflows/factory-caller.yml
+  git add -f .github/workflows/factory-caller.yml   # -f: some repos ignore .github
   if git diff --cached --quiet; then
     echo "  caller unchanged; nothing to commit"
   else

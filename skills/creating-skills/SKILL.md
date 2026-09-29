@@ -58,6 +58,16 @@ The entire skill creation process follows RED-GREEN-REFACTOR.
 - Project-specific conventions (put in CLAUDE.md)
 - Mechanical constraints (if it's enforceable with regex/validation, automate it—save documentation for judgment calls)
 
+## Editing a Skill from Observed Failures
+
+Usage telemetry and transcripts will surface sessions where a skill "didn't work." Most of those are model variance, not skill defects. Edit only when all three hold:
+
+1. A missing or wrong instruction caused the failure — you can point to the line that should have said something else.
+2. The same gap appears more than once, or once with severe consequences.
+3. The fix replaces guidance rather than appending to it. If the section is already correct and the agent ignored it, adding more words will not help.
+
+One bad run is not grounds. A/B the edit with `eval/` before shipping it.
+
 ## Skill Types
 
 ### Technique

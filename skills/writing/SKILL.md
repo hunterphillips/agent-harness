@@ -15,4 +15,4 @@ Router for deliberate writing work. Pick the workflow, load it, follow it.
 | Draft new prose — apply the craft principles while writing, not as a cleanup pass | [craft.md](craft.md) |
 | Create or refresh a project writing style guide (`WRITING.md`) | [writing-md-bootstrap.md](writing-md-bootstrap.md) |
 
-Drafting and cleaning share one rule set: [craft.md](craft.md) is the positive model (how to write well), [humanizer.md](humanizer.md) is the corrective model (what AI damage looks like and how to repair it). For a fresh draft, read craft.md and draft clean — don't write dirty and fix later. For existing text, humanizer.md leads and craft.md supplies the replacement patterns.
+Drafting and cleaning share one rule set: [craft.md](craft.md) is the positive model (how to write well), [humanizer.md](humanizer.md) is the corrective model (the eight structural tells and the repair process). For a fresh draft, read craft.md and draft clean — don't write dirty and fix later. For existing text, humanizer.md leads and craft.md supplies the replacement patterns. [patterns.md](patterns.md) is the long-tail catalogue; humanizer.md says when to load it.

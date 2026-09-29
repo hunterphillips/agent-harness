@@ -33,6 +33,6 @@ Anchor on one or two writers who explain hard material in the project's domain p
 ## Process
 
 1. Draft clean with these patterns from the start — don't draft dirty and clean later.
-2. Audit: "What makes this read as AI-generated?" — fix what surfaces ([humanizer.md](humanizer.md)).
+2. Audit against the eight structural tells in [humanizer.md](humanizer.md); name only the ones present and fix those. A generic "make this read less AI" pass invents problems in clean prose.
 3. When editing existing prose, make surgical, precision-preserving edits. Fix the phrase, not the paragraph.
 4. When unsure whether a sentence works, read it aloud.

@@ -89,10 +89,6 @@ in order to → to · due to the fact that → because · at this point in time 
 
 "Could potentially possibly be argued that." Often the right number of qualifiers is zero; when one is warranted, one carries it. Do not overcorrect into false certainty: a single honest "we don't know X" is good writing, and a qualifier that sets the claim's strength stays (humanizer.md, task step 4). Genuinely open questions go in their own list, not woven through the prose as caveats.
 
-### Hyphenated pair uniformity
-
-third-party, cross-functional, data-driven, high-quality, real-time, end-to-end, hyphenated with perfect consistency. Humans are inconsistent; technical compound modifiers are fine.
-
 ## Formatting and punctuation
 
 Any one of these is fine. The tell is density.

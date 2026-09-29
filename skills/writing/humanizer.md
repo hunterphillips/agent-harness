@@ -117,9 +117,9 @@ When generating prose rather than editing it, draft clean from the start with th
 >
 > The tools handle boilerplate well and are bad at knowing when they are wrong. I have accepted suggestions that compiled and still did the wrong thing because I stopped reading.
 >
-> The productivity claims are hard to verify. GitHub says users accept 30% of suggestions, but acceptance is not correctness. The 2024 Uplevel study found no significant difference in pull-request throughput between teams with and without assistants. The tools are useful where tests can catch a wrong suggestion, and risky where nothing can.
+> The productivity claims are hard to verify. GitHub says users accept 30% of suggestions, but acceptance is not correctness. The 2024 Uplevel study found no significant difference in pull-request throughput between teams with and without assistants. The tools pay off on code that tests can check, because a wrong suggestion gets caught there.
 
-**Changes:** removed chatbot artifacts, significance inflation, copula avoidance, negative parallelism, vague attribution, participial tack-ons, the generic conclusion; replaced the closing triple with one sentence that says when the tools are worth using.
+**Changes:** removed chatbot artifacts, significance inflation, copula avoidance, negative parallelism, vague attribution, participial tack-ons, the generic conclusion; replaced the closing triple with one sentence that says when the tools pay off.
 
 ## Reference
 

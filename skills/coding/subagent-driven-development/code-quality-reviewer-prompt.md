@@ -16,8 +16,8 @@ Use this template when dispatching a code quality reviewer subagent.
    - `{PLAN_OR_REQUIREMENTS}` — Task N from [plan-file]
    - `{BASE_SHA}` — commit before the task
    - `{HEAD_SHA}` — current commit
-3. Dispatch with the **Agent** tool (`subagent_type: general-purpose`), pasting the filled-in
-   template as the `prompt`. The subagent receives the full reviewer instructions inline and
+3. Dispatch with the **Agent** tool (`subagent_type: general-purpose`, `model: opus`), pasting the
+   filled-in template as the `prompt`. The subagent receives the full reviewer instructions inline and
    never needs the template path itself.
 
 **In addition to standard code quality concerns, the reviewer should check:**

@@ -91,6 +91,8 @@ Use the least powerful model that can handle each role to conserve cost and incr
 
 **Architecture, design, and review tasks**: use the most capable available model.
 
+Concretely, in this harness: cheap = `sonnet`, standard and most capable = `opus`. Always pass `model` explicitly; an omitted `model` inherits the session model, and session models (Fable, Astra) plan and review but never implement.
+
 **Task complexity signals:**
 - Touches 1-2 files with a complete spec → cheap model
 - Touches multiple files with integration concerns → standard model

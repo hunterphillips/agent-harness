@@ -7,6 +7,7 @@ Use this template when dispatching a code reviewer subagent.
 ```
 Agent tool:
   subagent_type: general-purpose
+  model: opus   # reviewers always run on opus
   description: "Review code changes"
   prompt: |
     You are a Senior Code Reviewer with expertise in software architecture,

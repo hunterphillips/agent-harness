@@ -9,6 +9,7 @@ If the task specifies TDD, the controller should read `../tdd/tdd.md` (path rela
 ```
 Agent tool:
   subagent_type: general-purpose
+  model: opus   # or sonnet when the task is mechanical (1-2 files, complete spec); never omit: an omitted model inherits the session model
   description: "Implement Task N: [task name]"
   prompt: |
     You are implementing Task N: [task name]

@@ -84,6 +84,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Git identity for pushes
+        run: |
+          git config user.name "claude[bot]"
+          git config user.email "41898282+claude[bot]@users.noreply.github.com"
       - name: Fetch run metadata and failed job logs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,3 +116,41 @@ jobs:
             Failed job logs: ${{ runner.temp }}/failed-logs.txt
             Read both files first, then follow the monitor skill's steps exactly.
           claude_args: "--model ${{ inputs.model }} --max-turns 60 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"
+
+  implement:
+    if: inputs.job == 'implement' && github.actor != 'claude[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: factory-issue-${{ github.repository }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Git identity for pushes
+        run: |
+          git config user.name "claude[bot]"
+          git config user.email "41898282+claude[bot]@users.noreply.github.com"
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: |
+            https://github.com/hunterphillips/agent-harness.git
+          plugins: |
+            harness@agent-harness
+          prompt: |
+            Implement issue #${{ inputs.issue_number }} in ${{ github.repository }}.
+
+            Invoke the Skill tool with `harness:coding`, then follow its routing table
+            row for implementing one self-contained issue (the
+            `implement-issue/implement-issue.md` workflow) exactly, in order, including
+            the back-pressure check, the branch claim, the tdd rules, the repo's own
+            checks, the code review on opus, and the draft PR that closes the issue.
+            Never merge. Never push to the default branch.
+          claude_args: "--model ${{ inputs.model }} --max-turns 120 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"

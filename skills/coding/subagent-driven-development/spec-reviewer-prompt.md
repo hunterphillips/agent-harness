@@ -9,6 +9,7 @@ The block below is a field spec for the **Agent** tool, not literal syntax — `
 ```
 Agent tool:
   subagent_type: general-purpose
+  model: opus   # reviewers always run on opus
   description: "Review spec compliance for Task N"
   prompt: |
     You are reviewing whether an implementation matches its specification.

@@ -54,6 +54,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
+          settings: '{"attribution": {"commit": "", "pr": ""}}'
           prompt: |
             Triage issue #${{ inputs.issue_number }} in ${{ github.repository }}.
 
@@ -107,6 +108,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
+          settings: '{"attribution": {"commit": "", "pr": ""}}'
           prompt: |
             /harness:monitor
             Repository: ${{ github.repository }}
@@ -144,6 +146,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
+          settings: '{"attribution": {"commit": "", "pr": ""}}'
           prompt: |
             Implement issue #${{ inputs.issue_number }} in ${{ github.repository }}.
 

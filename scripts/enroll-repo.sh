@@ -45,37 +45,78 @@ else
   echo "  secret set"
 fi
 
-# 3. Caller workflow. Phases 3 and 4 extend the triggers in this same file.
+# 3. Caller workflow. The workflow_run trigger must name workflows explicitly, so
+#    collect every workflow name in this repo except the caller itself. Re-run this
+#    script after adding a workflow so the monitor sees it.
+names=()
+for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
+  [[ -f "$wf" ]] || continue
+  [[ "$(basename "$wf")" == "factory-caller.yml" ]] && continue
+  n=$(sed -n 's/^name:[[:space:]]*//p' "$wf" | head -1 | tr -d '"'"'"'')
+  [[ -n "$n" ]] || n=$(basename "$wf" | sed 's/\.ya\?ml$//')
+  [[ "$n" == "factory" ]] && continue
+  names+=("$n")
+done
+
 mkdir -p .github/workflows
-cat > .github/workflows/factory-caller.yml <<'YAML'
+{
+cat <<'YAML'
 # Factory caller: delegates to the reusable jobs in hunterphillips/agent-harness.
 # Written by scripts/enroll-repo.sh in that repo; edit there, re-run to refresh.
 name: factory
 on:
   issues:
     types: [opened]
+YAML
+if (( ${#names[@]} )); then
+  echo "  workflow_run:"
+  echo "    workflows:"
+  for n in "${names[@]}"; do echo "      - \"$n\""; done
+  echo "    types: [completed]"
+fi
+cat <<'YAML'
 permissions:
-  contents: read
+  contents: write
   issues: write
-  pull-requests: read
+  pull-requests: write
+  actions: read
   id-token: write
 jobs:
   triage:
-    if: github.event.action == 'opened' && github.actor != 'claude[bot]'
+    if: github.event_name == 'issues' && github.event.action == 'opened' && github.actor != 'claude[bot]'
     uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
     with:
       job: triage
       issue_number: ${{ github.event.issue.number }}
     secrets: inherit
 YAML
-echo "  wrote .github/workflows/factory-caller.yml"
+if (( ${#names[@]} )); then
+cat <<'YAML'
+  monitor:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.name != 'factory' &&
+      github.event.workflow_run.triggering_actor.login != 'claude[bot]' &&
+      !startsWith(github.event.workflow_run.head_branch, 'claude/')
+    uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
+    with:
+      job: monitor
+      run_id: ${{ github.event.workflow_run.id }}
+      run_url: ${{ github.event.workflow_run.html_url }}
+      workflow_name: ${{ github.event.workflow_run.name }}
+    secrets: inherit
+YAML
+fi
+} > .github/workflows/factory-caller.yml
+echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none})"
 
 if (( push )); then
   git add .github/workflows/factory-caller.yml
   if git diff --cached --quiet; then
     echo "  caller unchanged; nothing to commit"
   else
-    git commit -q -m "Enroll in the factory: triage caller workflow" -- .github/workflows/factory-caller.yml
+    git commit -q -m "Factory caller workflow (enroll-repo.sh)" -- .github/workflows/factory-caller.yml
     git push -q
     echo "  committed and pushed"
   fi

@@ -19,6 +19,18 @@ on:
         description: Issue to triage or implement
         type: number
         required: false
+      run_id:
+        description: Failed workflow run to monitor
+        type: number
+        required: false
+      run_url:
+        description: HTML URL of the failed run
+        type: string
+        required: false
+      workflow_name:
+        description: Name of the workflow that failed
+        type: string
+        required: false
 
 jobs:
   triage:
@@ -54,3 +66,49 @@ jobs:
             Hard limits: do not modify files, commit, push, or open a pull request.
             Exactly one status label and one comment at the end.
           claude_args: "--model ${{ inputs.model }} --max-turns 40 --allowedTools Bash,Read,Glob,Grep,Skill,Agent"
+
+  monitor:
+    if: inputs.job == 'monitor' && github.actor != 'claude[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: factory-monitor-${{ github.repository }}-${{ inputs.workflow_name }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch run metadata and failed job logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          gh run view ${{ inputs.run_id }} \
+            --json name,conclusion,headBranch,headSha,url,event,jobs \
+            --jq '{name,conclusion,headBranch,headSha,url,event,failedJobs:[.jobs[]|select(.conclusion=="failure")|{name,url,steps:[.steps[]|select(.conclusion=="failure")|.name]}]}' \
+            > "$RUNNER_TEMP/run.json" || echo '{}' > "$RUNNER_TEMP/run.json"
+          gh run view ${{ inputs.run_id }} --log-failed 2>/dev/null | tail -c 40000 > "$RUNNER_TEMP/failed-logs.txt"
+          [ -s "$RUNNER_TEMP/failed-logs.txt" ] || echo "(no failed-job logs available)" > "$RUNNER_TEMP/failed-logs.txt"
+          echo "run.json: $(wc -c < "$RUNNER_TEMP/run.json") bytes; logs: $(wc -l < "$RUNNER_TEMP/failed-logs.txt") lines"
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: |
+            https://github.com/hunterphillips/agent-harness.git
+          plugins: |
+            harness@agent-harness
+          prompt: |
+            /harness:monitor
+            Repository: ${{ github.repository }}
+            Workflow: ${{ inputs.workflow_name }}
+            Failed run: ${{ inputs.run_url }} (id ${{ inputs.run_id }})
+            Run metadata (JSON): ${{ runner.temp }}/run.json
+            Failed job logs: ${{ runner.temp }}/failed-logs.txt
+            Read both files first, then follow the monitor skill's steps exactly.
+          claude_args: "--model ${{ inputs.model }} --max-turns 60 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"

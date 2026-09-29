@@ -30,10 +30,12 @@ Read ONLY the resolved lane's files:
 3. **Backlog tickets** — `thoughts/shared/tickets/*.md` with `status: backlog` in frontmatter, project-wide (not lane-scoped). Discrete work items waiting for a session: written by other sessions, by `to-issues`, or routed in from the second-brain drain (those carry `source:` pointing at the vault inbox capture and `routed_to:` listing every project that received it — the item may only partly concern this project). List them as one-liners (date · title · area) alongside the inbox; don't load bodies until one is chosen. Taking one up sets `status: in-progress` (then `done`); one that doesn't belong here gets `status: declined` with a one-line reason, never deleted.
 4. **GitHub issues** — when the repo resolves to GitHub mode (remote on GitHub and `gh auth status` succeeds; see `coding/to-issues/tracker-conventions.md`), also list open issues that are actionable by a session:
    ```bash
-   gh issue list --state open --label ready-for-agent,ready-for-human,needs-info \
-     --json number,title,labels,updatedAt --jq '.[] | "#\(.number) · \(.title) · \([.labels[].name] | join(",")) · \(.updatedAt[:10])"'
+   for l in ready-for-agent ready-for-human needs-info; do
+     gh issue list --state open --label "$l" --json number,title,updatedAt \
+       --jq ".[] | \"#\\(.number) · \\(.title) · $l · \\(.updatedAt[:10])\""
+   done
    ```
-   (`--label a,b,c` matches issues carrying **all** listed labels on some `gh` versions; if the list comes back empty, run one `gh issue list --label <x>` per label.) One-liners alongside the local tickets; don't load bodies until one is chosen. Taking one up adds `in-progress` (`gh issue edit <n> --add-label in-progress`) and removes it when the work lands or is dropped.
+   (one call per label: `--label a,b` means *all* of those labels, not any.) One-liners alongside the local tickets; don't load bodies until one is chosen. Taking one up adds `in-progress` (`gh issue edit <n> --add-label in-progress`) and removes it when the work lands or is dropped.
 
 Do not load other lanes' state into context — lane-scoped context is the point (the frontmatter scans during resolution don't count).
 

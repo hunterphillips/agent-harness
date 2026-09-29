@@ -8,9 +8,9 @@
 # --no-implement enrolls for triage and monitoring only (no ready-for-agent job);
 # cfo uses this until its unattended-host rule is revisited.
 #
-# The token comes from $CLAUDE_CODE_OAUTH_TOKEN if set, otherwise you are
-# prompted (generate one with `claude setup-token`). Pass --no-push to write the
-# workflow without committing it.
+# The token is read from $CLAUDE_CODE_OAUTH_TOKEN, else ~/.config/factory/token
+# (one line, mode 600; generate it once with `claude setup-token`), else you are
+# prompted. Pass --no-push to write the workflow without committing it.
 set -euo pipefail
 
 repo_path="${1:?usage: enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement]}"
@@ -48,6 +48,11 @@ if gh secret list --json name --jq '.[].name' | grep -qx CLAUDE_CODE_OAUTH_TOKEN
   echo "  secret CLAUDE_CODE_OAUTH_TOKEN already set (leave as is)"
 else
   token="${CLAUDE_CODE_OAUTH_TOKEN:-}"
+  token_file="$HOME/.config/factory/token"
+  if [[ -z "$token" && -s "$token_file" ]]; then
+    token=$(tr -d '[:space:]' < "$token_file")
+    echo "  token read from $token_file"
+  fi
   if [[ -z "$token" ]]; then
     read -r -s -p "  CLAUDE_CODE_OAUTH_TOKEN (from 'claude setup-token'): " token; echo
   fi

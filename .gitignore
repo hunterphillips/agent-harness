@@ -1,8 +1,10 @@
 # Local-only reading material and parked/unported skills — never deployed, never committed
 .notes/
 
-# Self-deployed harness copy (rsync output of this repo) and local settings
-.claude/
+# Local session state; the skills/agents symlinks are committed so a cloud clone self-loads the harness
+.claude/*
+!.claude/skills
+!.claude/agents
 
 # Personal/local config — not applicable outside this machine
 settings.json

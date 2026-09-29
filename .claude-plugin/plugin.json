@@ -1,0 +1,5 @@
+{
+  "name": "harness",
+  "description": "Hunter's agent harness: coding router, session skills, subagents, and the Human Writer output style",
+  "version": "0.1.0"
+}

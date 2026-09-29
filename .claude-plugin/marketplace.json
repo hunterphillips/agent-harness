@@ -1,0 +1,11 @@
+{
+  "name": "agent-harness",
+  "owner": { "name": "Hunter Phillips" },
+  "plugins": [
+    {
+      "name": "harness",
+      "source": "./",
+      "description": "Hunter's agent harness: coding router, session skills, subagents, and the Human Writer output style"
+    }
+  ]
+}

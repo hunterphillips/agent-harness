@@ -30,6 +30,7 @@ For each phase in the plan:
 2. **Automated verification**: run every command from the phase's "Automated Verification" section; document pass/fail; investigate root cause of failures.
 3. **Manual criteria**: list what needs human testing with clear steps.
 4. **Edge cases**: were error conditions handled? Missing validations? Could this break existing functionality?
+5. **Invariants**: for every `B<n>` the plan cites, name the check that exercised it and its result. Then open the design doc or PRD the plan came from and list any invariant it declares that no criterion cites; those are gaps, not passes.
 
 ### Step 3: Validation Report
 

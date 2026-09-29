@@ -24,6 +24,15 @@ The problem that the user is facing, from the user's perspective.
 
 The solution to the problem, from the user's perspective.
 
+## Behavior
+
+Numbered invariants (`B1`, `B2`, …): what a user can observe, stated so a test could check it, with no implementation detail. Cover the empty, error, and loading states, the edge cases, and what must not regress. Plans and issues cite these numbers in their success and acceptance criteria. Omit the section for a trivial fix.
+
+<behavior-example>
+B1. An account with no transactions shows the empty state, never a zero-row table.
+B2. A balance request that fails shows the last known balance with a stale marker, never a blank.
+</behavior-example>
+
 ## User Stories
 
 A LONG, numbered list of user stories covering all aspects of the feature, each in the format:

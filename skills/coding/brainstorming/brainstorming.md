@@ -28,13 +28,14 @@ Start by understanding the current project context, then ask questions one at a 
 - Break it into sections of 200-300 words
 - Ask after each section whether it looks right so far
 - Cover: architecture, components, data flow, error handling, testing
+- End with **Behavior**: a numbered list (`B1`, `B2`, …) of user-observable invariants the design commits to, each testable and free of implementation detail: the empty, error, and loading states; the edge cases that were discussed; what must not regress. Plans, issues, and validation cite these numbers. A trivial fix gets none (same bar as the router's scratch row).
 - Be ready to go back and clarify if something doesn't make sense
 
 ## After the Design
 
 **Documentation:**
 
-- Write the validated design to `thoughts/shared/plans/YYYY-MM-DD-<topic>-design.md` — same directory the plan skills read from, so the design feeds directly into implementation planning (thoughts/ is synced, not committed to the code repo)
+- Write the validated design to `thoughts/shared/plans/YYYY-MM-DD-<topic>-design.md` — same directory the plan skills read from, so the design feeds directly into implementation planning (thoughts/ is synced, not committed to the code repo). The `## Behavior` section carries the numbered invariants verbatim.
 
 **Implementation (if continuing):**
 

@@ -58,7 +58,9 @@ Avoid specific file paths or code snippets — they go stale fast. Exception: a 
 
 ## Acceptance criteria
 
-- [ ] Criterion 1
+Cite the PRD's behavior invariants where one applies (`B3: …`); an agent implementing this slice tests against them.
+
+- [ ] B1: Criterion 1
 - [ ] Criterion 2
 
 ## Blocked by

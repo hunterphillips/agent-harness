@@ -1,0 +1,12 @@
+# Throwaway: exists only to test the factory monitor job. Delete after the test.
+name: throwaway-ci
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Running throwaway test suite"
+          echo "AssertionError: expected total to be 42 but got 41 (tests/test_sum.py:17)"
+          exit 1

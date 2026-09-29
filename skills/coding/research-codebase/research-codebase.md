@@ -47,7 +47,7 @@ If no research question was provided, ask for one and wait.
 
    ## Detailed Findings
    ### [Component/Area]
-   - Finding with reference ([file.ext:line](link))
+   - Finding with reference (`file.ext:line`)
    - Connections and implementation details
 
    ## Code References

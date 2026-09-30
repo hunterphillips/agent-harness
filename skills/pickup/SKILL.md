@@ -36,6 +36,12 @@ Read ONLY the resolved lane's files:
    done
    ```
    (one call per label: `--label a,b` means *all* of those labels, not any.) One-liners alongside the local tickets; don't load bodies until one is chosen. Taking one up adds `in-progress` (`gh issue edit <n> --add-label in-progress`) and removes it when the work lands or is dropped.
+   Also list open pull requests, since factory runs and other sessions land their work as PRs that nobody watches between sessions:
+   ```bash
+   gh pr list --state open --json number,title,headRefName,isDraft,updatedAt \
+     --jq '.[] | "#\(.number) · \(.title) · \(.headRefName) · \(if .isDraft then "draft" else "ready" end) · \(.updatedAt[:10])"'
+   ```
+   A PR opened by an unattended run is reviewed locally before merging (worktree, suites, screenshots), never merged from the listing.
 
 Do not load other lanes' state into context — lane-scoped context is the point (the frontmatter scans during resolution don't count).
 

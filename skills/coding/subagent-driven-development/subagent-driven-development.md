@@ -98,6 +98,25 @@ Concretely, in this harness: cheap = `sonnet`, standard and most capable = `opus
 - Touches multiple files with integration concerns → standard model
 - Requires design judgment or broad codebase understanding → most capable model
 
+## Waves: how many implementers to run at once
+
+The per-task loop above never changes. What varies is how many tasks are in flight.
+
+Before each dispatch, look at the remaining tasks. A task is **ready** when every task in its `Depends on` is complete. Two ready tasks are **independent** when their `Files` lists don't overlap. A **wave** is a set of ready, independent tasks.
+
+Decide per wave, and say which you chose in one line. Don't ask.
+
+- **Run the wave concurrently** when it saves real time: two or more substantial tasks, each worth its own implementer, whose reviews can proceed on their own.
+- **Run one at a time** when tasks are small (one dispatch that lists all the small edits beats several concurrent agents), when a task changes an interface a later task consumes, when the plan's file lists look uncertain, or when the tasks would edit the same regions even if the file lists differ.
+
+Mechanics of a concurrent wave:
+
+1. Dispatch every implementer of the wave in one message, each with `isolation: "worktree"` and a `model` chosen per task. Worktrees branch from the repository's default branch unless `worktree.baseRef` is `"head"` in settings; when the plan branch has commits the tasks need, make sure each worktree starts from the branch head, or the implementers build on a stale base.
+2. Run the spec and quality reviews per task, as usual, against that task's branch. Fix subagents work in the same worktree.
+3. When a task passes both reviews, merge its branch into the plan branch and run the suite. Resolve conflicts yourself. A conflict means a `Files` list was incomplete; note it in the plan.
+4. **Shared files are yours, not the implementers'**: `CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, the plan file and its checkboxes, the task list. Implementers report what should change there; you apply it after the merge.
+5. Start the next wave after the merge, since its tasks may depend on what just landed.
+
 ## Handling Implementer Status
 
 Implementer subagents report one of four statuses. Handle each appropriately:
@@ -209,7 +228,7 @@ Done!
 **vs. Manual execution:**
 - Subagents follow TDD naturally
 - Fresh context per task (no confusion)
-- Parallel-safe (subagents don't interfere)
+- Independent tasks can run concurrently in worktrees (see Waves)
 - Subagent can ask questions (before AND during work)
 
 **vs. Executing Plans:**
@@ -242,7 +261,7 @@ Done!
 - Start implementation on main/master branch without explicit user consent
 - Skip reviews (spec compliance OR code quality)
 - Proceed with unfixed issues
-- Dispatch multiple *implementation* subagents in parallel — plan tasks may share files, so implementers run sequentially (for genuinely independent work in disjoint files, use the `dispatching-parallel-agents` skill instead — different problem, opposite advice)
+- Run implementers concurrently on tasks that share a file or where one depends on the other (see Waves); for fan-outs that are not plan tasks, use the `dispatching-parallel-agents` skill instead
 - Make subagent read plan file (provide full text instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)
@@ -270,7 +289,7 @@ Done!
 ## Integration
 
 **Required workflow:**
-- **Worktree isolation** - Dispatch agents with `isolation: "worktree"` for an isolated workspace
+- **Worktree isolation** - Every implementer in a concurrent wave gets `isolation: "worktree"`; a lone implementer may work in the plan branch directly
 - **[create-plan workflow](../create-plan/create-plan.md)** - Creates the plan this workflow executes
 - **[requesting-code-review workflow](../requesting-code-review/requesting-code-review.md)** - Reviewer subagent template used by the code-quality stage ([code-reviewer.md](../requesting-code-review/code-reviewer.md))
 - **`/commit`** (commit any uncommitted work) + **[describe-pr workflow](../describe-pr/describe-pr.md)** (only if the repo has a remote/PR; otherwise just summarize) - Finish the branch after all tasks

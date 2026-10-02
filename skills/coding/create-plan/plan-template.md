@@ -49,7 +49,8 @@ Examples: `2025-01-08-ENG-1478-parent-child-tracking.md`, `2025-01-08-improve-er
 
 #### 1. [Component/File Group]
 
-**File**: `path/to/file.ext`
+**Files**: `path/to/file.ext`, `path/to/other.ext` (every file this group creates or modifies, as far as research shows)
+**Depends on**: none | 1.2, Phase 1 (groups or phases whose output this one consumes)
 **Changes**: [Summary of changes]
 
 ```[language]
@@ -74,6 +75,8 @@ Examples: `2025-01-08-ENG-1478-parent-child-tracking.md`, `2025-01-08-improve-er
 - [ ] Performance is acceptable under load
 - [ ] Edge case handling verified manually
 - [ ] No regressions in related features
+
+`Files` and `Depends on` let the executor see which groups can run at the same time (`subagent-driven-development` groups ready, non-overlapping tasks into waves). List what research found; a shared file nobody thought of surfaces as a merge conflict at execution, not as a bug, so a best-effort list is enough. The list schedules work; it is not a fence around the implementer.
 
 Cite the behavior invariants (`B<n>`) from the design doc or PRD on the criteria that prove them; every invariant the plan touches should appear on at least one criterion. Plans for trivial fixes have no invariants to cite.
 

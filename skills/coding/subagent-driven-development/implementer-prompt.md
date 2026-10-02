@@ -10,6 +10,7 @@ If the task specifies TDD, the controller should read `../tdd/tdd.md` (path rela
 Agent tool:
   subagent_type: general-purpose
   model: opus   # or sonnet when the task is mechanical (1-2 files, complete spec); never omit: an omitted model inherits the session model
+  isolation: worktree   # when this task is one of several dispatched in the same message (a wave); omit for a lone implementer
   description: "Implement Task N: [task name]"
   prompt: |
     You are implementing Task N: [task name]
@@ -46,6 +47,14 @@ Agent tool:
 
     **While you work:** If you encounter something unexpected or unclear, **ask questions**.
     It's always OK to pause and clarify. Don't guess or make assumptions.
+
+    ## Files
+
+    The task lists the files the plan expected to change. That list scheduled this
+    task alongside others; it is not a boundary. If the work needs another file,
+    edit it and name it under "Files changed" in your report. The exceptions are
+    shared files the controller owns: CLAUDE.md, CONTEXT.md, docs/adr/, the plan
+    file. Don't edit those; say what should change there in your report.
 
     ## Code Organization
 

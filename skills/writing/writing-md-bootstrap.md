@@ -1,11 +1,11 @@
 # Bootstrap a project WRITING.md
 
-Create a per-project writing style guide at the repo root (`WRITING.md`). Model: the guides this skill was distilled from — scope statement, voice anchor with real quotes, project-specific rules, AI-tells subset, process.
+Create a per-project writing style guide at the repo root (`WRITING.md`). Model: the guides this skill was distilled from — scope statement, voice anchor, project-specific rules, AI-tells subset, process.
 
 ## Process
 
 1. **Map the prose surfaces.** What user-facing prose does this project produce? (Docs, digests, summaries, UI copy, generated LLM output, emails.) List them in the guide's scope line — including any prompts/templates that *generate* prose, since tone is set there ("fix tone at the prompt, not the output").
-2. **Pick voice anchors with the user.** Propose 1–2 writers who explain this project's domain plainly (research → Melanie Mitchell; tech/business analysis → Benedict Evans; finance for non-experts → Morgan Housel; adjust to domain). Ask the user to confirm or name their own. Include 1–2 short real quotes per anchor showing the register, and state explicitly: borrow the principles (fewest words, concrete over abstract, honest unknowns), not the tics.
+2. **Pick voice anchors with the user.** Propose 1–2 writers who explain this project's domain plainly (research → Melanie Mitchell; tech/business analysis → Benedict Evans; finance for non-experts → Morgan Housel; adjust to domain). Ask the user to confirm or name their own. Name the anchor and state explicitly: borrow the principles (fewest words, concrete over abstract, honest unknowns), not the tics. No quotes: a quotable line at the top of a style guide becomes the target every session writes toward, and the quotable lines are the aphorisms.
 3. **Collect project rules.** Banned internal shorthand, naming conventions, legal/attribution constraints, register per surface. These come from the user and the codebase — don't invent them.
 4. **Inline the portable core.** A condensed AI-tells list and the general patterns (billboard test, adjectives state don't sell, no metacommentary, concede-then-commit, shorter-when-equal) — copy from [craft.md](craft.md), trimmed to what this project's surfaces need.
 5. **End with process**: draft clean → AI-audit → surgical edits.
@@ -20,7 +20,7 @@ sounds like a person stating things directly. [Register: e.g. plain editorial /
 academic-but-plain]. When unsure whether a sentence works, read it aloud.
 
 ## Voice anchor
-[1–2 writers + short quotes; principles not tics]
+[1–2 writers; principles not tics; no quotes]
 
 ## Project rules
 [shorthand bans, naming, attribution, per-surface register]

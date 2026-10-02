@@ -102,7 +102,7 @@ Concretely, in this harness: cheap = `sonnet`, standard and most capable = `opus
 
 The per-task loop above never changes. What varies is how many tasks are in flight.
 
-Before each dispatch, look at the remaining tasks. A task is **ready** when every task in its `Depends on` is complete. Two ready tasks are **independent** when their `Files` lists don't overlap. A **wave** is a set of ready, independent tasks.
+Before each dispatch, look at the remaining tasks. A task is **ready** when every task in its `Depends on` is complete. Two ready tasks are **independent** when their `Files` lists don't overlap **and** neither defines something the other consumes (a type, a message format, an API). Different files are not enough: a consumer dispatched beside its producer builds against a moving target. Either sequence the pair, or treat the interface as frozen because the plan already states it exactly. If a review changes a shared interface mid-wave, stop and re-brief the implementer that consumes it before it reports. A **wave** is a set of ready, independent tasks.
 
 Decide per wave, and say which you chose in one line. Don't ask.
 
@@ -111,8 +111,8 @@ Decide per wave, and say which you chose in one line. Don't ask.
 
 Mechanics of a concurrent wave:
 
-1. Dispatch every implementer of the wave in one message, each with `isolation: "worktree"` and a `model` chosen per task. Worktrees branch from the repository's default branch unless `worktree.baseRef` is `"head"` in settings; when the plan branch has commits the tasks need, make sure each worktree starts from the branch head, or the implementers build on a stale base.
-2. Run the spec and quality reviews per task, as usual, against that task's branch. Fix subagents work in the same worktree.
+1. Every worktree starts from the plan branch's head, never from the default branch; earlier tasks' merged work is the base the wave builds on. `isolation: "worktree"` gives you that only when `worktree.baseRef` is `"head"` in settings; otherwise, or when the repo is not the session's cwd root, or when packages need a build step to resolve each other, create the worktrees by hand (`git worktree add`) and put the setup commands in each brief. Then dispatch every implementer of the wave in one message, each with a `model` chosen per task.
+2. Run the spec and quality reviews per task, as usual, against that task's branch, as each implementer reports; don't wait for the whole wave. Fix subagents work in the same worktree. The reviews, not the implementers, are what fill your context in a wave: keep the review prompts self-contained and let the templates' short verdict format do its job.
 3. When a task passes both reviews, merge its branch into the plan branch and run the suite. Resolve conflicts yourself. A conflict means a `Files` list was incomplete; note it in the plan.
 4. **Shared files are yours, not the implementers'**: `CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, the plan file and its checkboxes, the task list. Implementers report what should change there; you apply it after the merge.
 5. Start the next wave after the merge, since its tasks may depend on what just landed.
@@ -137,7 +137,7 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 ## Fixing Review Issues
 
-When a reviewer (spec or quality) returns issues, **dispatch a fresh fix subagent** — do not assume you can resume the implementer. There is no reliable way to continue a previous agent's session, so re-feed the fix subagent what it needs: the original task text, what was built, the reviewer's specific findings, and the file paths / commit range. Then re-run the *same* reviewer on the result and repeat until it approves. (If your environment supports continuing a previous agent with its context intact, you may use that to save tokens — but don't depend on it.)
+When a reviewer (spec or quality) returns issues, **dispatch a fresh fix subagent** — do not assume you can resume the implementer. There is no reliable way to continue a previous agent's session, so re-feed the fix subagent what it needs: the original task text, what was built, the reviewer's specific findings, and the file paths / commit range. Then re-run the *same* reviewer on the result and repeat until it approves. (In this harness, re-review by continuing the same reviewer with `SendMessage` instead of dispatching a fresh one; it already holds the task and the first findings. Fall back to a fresh reviewer if the agent is gone.)
 
 The two stages pull in opposite directions by design: the **spec** stage rewards YAGNI (build only what was asked); the **quality** stage rewards robustness (edge cases, error handling). When a quality reviewer proposes work beyond the spec, that tension is expected — apply it if it's cheap and clearly right, otherwise push back with reasoning (see `requesting-code-review`).
 

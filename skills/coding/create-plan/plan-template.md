@@ -50,7 +50,7 @@ Examples: `2025-01-08-ENG-1478-parent-child-tracking.md`, `2025-01-08-improve-er
 #### 1. [Component/File Group]
 
 **Files**: `path/to/file.ext`, `path/to/other.ext` (every file this group creates or modifies, as far as research shows)
-**Depends on**: none | 1.2, Phase 1 (groups or phases whose output this one consumes)
+**Depends on**: none | 1.2, Phase 1 (groups or phases whose output this one consumes, including a type, message format, or API another group defines, even when the files are different)
 **Changes**: [Summary of changes]
 
 ```[language]

@@ -1,6 +1,6 @@
 # Capability A/B eval
 
-This runner compares the final artifacts from the repository configuration and a customization-free control. It uses blind pairwise Codex reviews in both A/B orders. Coding tasks run deterministic checks before qualitative review.
+This runner compares the final artifacts from the repository configuration and a customization-free control. It uses blind pairwise Codex reviews in both A/B orders. Both arms run with `--setting-sources project`, so they load project settings only and a user-level hook, setting, or output style in `~/.claude` cannot contaminate an A/B result. Coding tasks run deterministic checks before qualitative review.
 
 Requires Python 3.12, `git`, an authenticated `claude` CLI, and an authenticated `codex` CLI.
 

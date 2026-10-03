@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Monitor
 
-One failed workflow run in. One deduplicated issue out, or a fix PR when the gate passes. Runs unattended on a GitHub Actions runner with the repo checked out at the default branch, `gh` authenticated, and these inputs in the prompt: repository, workflow name, run id and URL, a JSON file of run metadata, and a text file with the failed jobs' logs.
+One failed workflow run in. One deduplicated issue out, plus a reviewed fix PR when the gate passes, merged when the PR proves the fix. Runs unattended on a GitHub Actions runner with the repo checked out at the default branch, `gh` authenticated, and these inputs in the prompt: repository, workflow name, run id and URL, a JSON file of run metadata, and a text file with the failed jobs' logs.
 
 Never read, print, or write secrets: no `env`, no `cat` of credential files, no token values in issues or PRs. A failure whose cause is a token, credential, or permission always ends as an issue naming the single human action.
 
@@ -25,8 +25,9 @@ Never read, print, or write secrets: no `env`, no `cat` of credential files, no 
    6. Localized: a few files in one module, no interface change.
    7. Small: fixable in this run with a regression test.
 6. **Open the issue** (always, pass or fail, so later occurrences have an anchor). Title `[monitor] <workflow>: <cause in six words>`. Label `monitor`. Body: the cause in one sentence; the run URL; the failed job and first error line in a code block; the single human action if the gate failed (rotate which credential where, bump which quota, re-run after which outage); the ranked hypotheses when confidence is below high; and `<!-- monitor-signature: <signature> -->` on its own line at the end. `gh issue create --label monitor --title ... --body-file -`.
-7. **Gate passed: fix it.** Branch `claude/fix-<issue number>` from the default branch. If that branch already exists on the remote, another run owns it: comment on the issue and stop. Make the smallest change that fixes the cause, add or extend a test that fails before and passes after, run that test plus the repo's lint if one is declared. Commit with a message that names the cause, push, then `gh pr create --draft --title "<cause>" --body "Closes #<issue>. <two sentences: cause, fix, how verified>"`. Comment on the issue with the PR link. Never merge.
-8. **Gate failed: stop** after the issue. Do not push, do not open a PR.
+7. **Gate passed: fix it.** Branch `claude/fix-<issue number>` from the default branch. If that branch already exists on the remote, another run owns it: comment on the issue and stop. Make the smallest change that fixes the cause, add or extend a test that fails before and passes after, run that test plus the repo's lint if one is declared. Then review it: read `../coding/requesting-code-review/code-reviewer.md` (relative to this skill directory), fill its placeholders (description = the cause and fix; requirements = the issue; base = the default branch SHA; head = current SHA), dispatch it with the Agent tool on `opus`, and fix every Critical and Important finding. Commit with a message that names the cause, push, then `gh pr create --draft --title "<cause>" --body "Closes #<issue>. <two sentences: cause, fix, how verified>. Review: <one line>"`. Comment on the issue with the PR link.
+8. **Merge when the PR proves the fix.** The job prompt says whether auto-merge is allowed. If it is, merge only when all hold: the review left no unresolved Critical or Important findings; `gh pr checks <pr> --watch --fail-fast` passed; and the workflow that failed ran on this PR and passed. If that workflow does not run on pull requests (a schedule, a deploy, a push-only job), the PR cannot prove the fix: leave the draft and say so in the issue. To merge: `gh pr ready <pr>` and `gh pr merge <pr> --squash --delete-branch`, then comment on the issue. Never push to the default branch directly.
+9. **Gate failed: stop** after the issue. Do not push, do not open a PR.
 
 ## Report
 

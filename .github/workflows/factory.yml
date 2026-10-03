@@ -76,7 +76,7 @@ jobs:
   monitor:
     if: inputs.job == 'monitor' && github.actor != 'claude[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     concurrency:
       group: factory-monitor-${{ github.repository }}-${{ inputs.workflow_name }}
       cancel-in-progress: false
@@ -122,6 +122,7 @@ jobs:
             Run metadata (JSON): ${{ runner.temp }}/run.json
             Failed job logs: ${{ runner.temp }}/failed-logs.txt
             Read both files first, then follow the monitor skill's steps exactly.
+            ${{ inputs.auto_merge && 'AUTO-MERGE ALLOWED for a fix PR that meets the skill''s merge step.' || 'AUTO-MERGE NOT ALLOWED: leave any fix PR as a draft.' }}
           claude_args: "--model ${{ inputs.model }} --max-turns 60 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"
 
   implement:

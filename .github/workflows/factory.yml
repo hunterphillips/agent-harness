@@ -31,6 +31,11 @@ on:
         description: Name of the workflow that failed
         type: string
         required: false
+      auto_merge:
+        description: Merge the implement job's PR once its review and checks pass, when the issue came from the repo owner or the factory itself. A caller passes false to always leave a draft for human review.
+        type: boolean
+        required: false
+        default: true
 
 jobs:
   triage:
@@ -139,6 +144,20 @@ jobs:
         run: |
           git config user.name "claude[bot]"
           git config user.email "41898282+claude[bot]@users.noreply.github.com"
+      # Auto-merge only for work the owner asked for: the issue's author is the
+      # repo owner, or the factory itself (monitor issues). Anyone else's issue
+      # gets a draft PR for human review. Decided here, mechanically, not by the agent.
+      - name: Merge policy
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          author=$(gh issue view ${{ inputs.issue_number }} --repo ${{ github.repository }} --json author --jq .author.login)
+          if [ "${{ inputs.auto_merge }}" = "true" ] && { [ "$author" = "${{ github.repository_owner }}" ] || [ "$author" = "claude" ] || [ "$author" = "app/claude" ] || [ "$author" = "claude[bot]" ]; }; then
+            echo "line=AUTO-MERGE ALLOWED: the issue author ($author) is the owner or the factory. Follow implement-issue's merge step." >> "$GITHUB_OUTPUT"
+          else
+            echo "line=AUTO-MERGE NOT ALLOWED (author: $author, auto_merge: ${{ inputs.auto_merge }}). Leave the PR as a draft for human review; skip the merge step." >> "$GITHUB_OUTPUT"
+          fi
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -154,6 +173,8 @@ jobs:
             row for implementing one self-contained issue (the
             `implement-issue/implement-issue.md` workflow) exactly, in order, including
             the back-pressure check, the branch claim, the tdd rules, the repo's own
-            checks, the code review on opus, and the draft PR that closes the issue.
-            Never merge. Never push to the default branch.
+            checks, the code review on opus, and the PR that closes the issue.
+            Never push to the default branch directly.
+
+            ${{ steps.policy.outputs.line }}
           claude_args: "--model ${{ inputs.model }} --max-turns 120 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"

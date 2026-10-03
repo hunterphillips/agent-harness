@@ -41,7 +41,7 @@ Read ONLY the resolved lane's files:
    gh pr list --state open --json number,title,headRefName,isDraft,updatedAt \
      --jq '.[] | "#\(.number) · \(.title) · \(.headRefName) · \(if .isDraft then "draft" else "ready" end) · \(.updatedAt[:10])"'
    ```
-   A PR opened by an unattended run is reviewed locally before merging (worktree, suites, screenshots), never merged from the listing.
+   Factory PRs for your own issues merge themselves once review and checks pass; one still open is a draft that failed a condition or came from someone else's issue, and its comment says which. Review those locally (worktree, suites, screenshots); never merge from the listing.
 
 Do not load other lanes' state into context — lane-scoped context is the point (the frontmatter scans during resolution don't count).
 

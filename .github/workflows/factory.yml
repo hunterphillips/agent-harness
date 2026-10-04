@@ -163,7 +163,8 @@ jobs:
           else
             echo "line=AUTO-MERGE NOT ALLOWED (author: $author, auto_merge: ${{ inputs.auto_merge }}). Leave the PR as a draft for human review; skip the merge step." >> "$GITHUB_OUTPUT"
           fi
-      - uses: anthropics/claude-code-action@v1
+      - id: agent
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: |
@@ -183,3 +184,40 @@ jobs:
 
             ${{ steps.policy.outputs.line }}
           claude_args: "--model ${{ inputs.model }} --max-turns 120 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"
+      # Every run ends in a state Hunter can see: merged, or a draft with the
+      # reason on the issue. If the agent stopped early (turn budget, crash,
+      # skipped step), finish the bookkeeping here, mechanically.
+      - name: Make sure the run left a visible outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ inputs.issue_number }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          labels=$(gh issue view "$N" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')
+          case ",$labels," in *,in-progress,*) ;; *) echo "issue already left in-progress; nothing to do"; exit 0;; esac
+          base=$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)
+          branch="claude/issue-$N"
+          pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
+          ahead=$(gh api "repos/$REPO/compare/$base...$branch" --jq .ahead_by 2>/dev/null || echo 0)
+          if [ -z "$pr" ] && [ "${ahead:-0}" -gt 0 ]; then
+            pr=$(gh pr create --repo "$REPO" --draft --base "$base" --head "$branch" \
+              --title "Issue #$N (run ended before finishing)" \
+              --body "Closes #$N. The implement run pushed $ahead commit(s) but ended before opening its PR. Run: $RUN_URL" | grep -o '[0-9]*$')
+          fi
+          if [ -n "$pr" ]; then
+            msg="The implement run ended before finishing: PR #$pr is a draft and was not merged. Run: $RUN_URL"
+          else
+            msg="The implement run ended without pushing any work. Run: $RUN_URL"
+          fi
+          gh issue edit "$N" --repo "$REPO" --remove-label in-progress --add-label ready-for-human
+          gh issue comment "$N" --repo "$REPO" --body "$msg"
+      - name: Save the session transcript
+        if: always() && steps.agent.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: implement-transcript-${{ inputs.issue_number }}
+          path: ${{ steps.agent.outputs.execution_file }}
+          retention-days: 14

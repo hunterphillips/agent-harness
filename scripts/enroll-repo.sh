@@ -96,6 +96,8 @@ permissions:
   issues: write
   pull-requests: write
   actions: read
+  checks: read
+  statuses: read
   id-token: write
 jobs:
   triage:

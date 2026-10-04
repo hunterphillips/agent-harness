@@ -85,6 +85,8 @@ jobs:
       issues: write
       pull-requests: write
       actions: read
+      checks: read
+      statuses: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -136,6 +138,8 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      checks: read
+      statuses: read
       id-token: write
     steps:
       - uses: actions/checkout@v4

@@ -83,6 +83,13 @@ name: factory
 on:
   issues:
     types: [opened, labeled]
+  # The factory starts the next part of a split issue this way.
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue for the implement job
+        required: true
+        type: number
 YAML
 if (( ${#names[@]} )); then
   echo "  workflow_run:"
@@ -95,7 +102,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  actions: read
+  actions: write
   checks: read
   statuses: read
   id-token: write
@@ -129,15 +136,16 @@ if (( implement )); then
 cat <<'YAML'
   implement:
     if: >-
+      github.event_name == 'workflow_dispatch' || (
       github.event_name == 'issues' &&
       github.event.action == 'labeled' &&
       github.event.label.name == 'ready-for-agent' &&
-      github.actor != 'claude[bot]'
+      github.actor != 'claude[bot]')
     uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
     with:
       job: implement
       model: claude-opus-5-5
-      issue_number: ${{ github.event.issue.number }}
+      issue_number: ${{ github.event.issue.number || inputs.issue_number }}
     secrets: inherit
 YAML
 fi

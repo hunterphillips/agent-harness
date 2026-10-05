@@ -24,7 +24,7 @@ Runs locally when the user asks for an issue to be triaged, and headless as the 
    - Missing a reproduction, version, or the expected behavior → `needs-info`. Comment: at most three questions, each answerable in a line.
    - Blocked on an external event → `wait`. Comment: what it waits on.
    - Question → answer it in the comment if the code answers it, then `ready-for-human` so the reporter closes it or turns it into a request.
-   Remove `needs-triage` and any other status label; one status label per issue. GitHub mode: `gh issue edit <n> --add-label <x> --remove-label needs-triage` and `gh issue comment <n> --body-file -`. Local mode: set the `Status:` line and append under `## Comments`.
+   Remove `needs-triage` and any other status label; one status label per issue. In GitHub mode, a `ready-for-human` or `needs-info` comment starts with an @-mention of the repo owner (`gh repo view --json owner --jq .owner.login`): the owner reads mentions and nothing else. Never mention anyone in a `ready-for-agent` or `wait` comment. GitHub mode: `gh issue edit <n> --add-label <x> --remove-label needs-triage` and `gh issue comment <n> --body-file -`. Local mode: set the `Status:` line and append under `## Comments`.
 
 ## Comment shape
 

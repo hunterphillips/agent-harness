@@ -193,6 +193,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           N: ${{ inputs.issue_number }}
           REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set +e
@@ -208,11 +209,11 @@ jobs:
               --body "Closes #$N. The implement run pushed $ahead commit(s) but ended before opening its PR. Run: $RUN_URL" | grep -o '[0-9]*$')
           fi
           if [ -n "$pr" ]; then
-            msg="The implement run ended before finishing: PR #$pr is a draft and was not merged. Run: $RUN_URL"
+            msg="@$OWNER The implement run ended before finishing: PR #$pr is a draft and was not merged. Run: $RUN_URL"
           else
-            msg="The implement run ended without pushing any work. Run: $RUN_URL"
+            msg="@$OWNER The implement run ended without pushing any work. Run: $RUN_URL"
           fi
-          gh issue edit "$N" --repo "$REPO" --remove-label in-progress --add-label ready-for-human
+          gh issue edit "$N" --repo "$REPO" --remove-label in-progress,ready-for-agent --add-label ready-for-human
           gh issue comment "$N" --repo "$REPO" --body "$msg"
       - name: Save the session transcript
         if: always() && steps.agent.outputs.execution_file != ''

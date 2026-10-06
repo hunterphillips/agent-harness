@@ -108,7 +108,7 @@ permissions:
   id-token: write
 jobs:
   triage:
-    if: github.event_name == 'issues' && github.event.action == 'opened' && github.actor != 'claude[bot]'
+    if: github.repository == 'SLUG' && github.event_name == 'issues' && github.event.action == 'opened' && github.actor != 'claude[bot]'
     uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
     with:
       job: triage
@@ -119,6 +119,7 @@ if (( ${#names[@]} )); then
 cat <<'YAML'
   monitor:
     if: >-
+      github.repository == 'SLUG' &&
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'failure' &&
       github.event.workflow_run.name != 'factory' &&
@@ -136,20 +137,21 @@ if (( implement )); then
 cat <<'YAML'
   implement:
     if: >-
+      github.repository == 'SLUG' && (
       github.event_name == 'workflow_dispatch' || (
       github.event_name == 'issues' &&
       github.event.action == 'labeled' &&
       github.event.label.name == 'ready-for-agent' &&
-      github.actor != 'claude[bot]')
+      github.actor != 'claude[bot]'))
     uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
     with:
       job: implement
       model: claude-opus-5-5
-      issue_number: ${{ github.event.issue.number || inputs.issue_number }}
+      issue_number: ${{ github.event.issue.number || fromJSON(inputs.issue_number || '0') }}   # dispatch inputs arrive as strings
     secrets: inherit
 YAML
 fi
-} > .github/workflows/factory-caller.yml
+} | sed "s|SLUG|$slug|g" > .github/workflows/factory-caller.yml
 echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none}; implement job: $implement)"
 
 if (( push )); then

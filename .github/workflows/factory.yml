@@ -345,8 +345,25 @@ jobs:
           if [ -n "$next" ]; then
             base=$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)
             gh issue edit "$next" --repo "$REPO" --remove-label wait --add-label ready-for-agent
+            since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
             gh workflow run factory-caller.yml --repo "$REPO" --ref "$base" -f issue_number="$next"
-            gh issue comment "$parent" --repo "$REPO" --body "Started part #$next."
+            # gh exits 0 once the dispatch is accepted; a run that fails at startup
+            # only shows up afterwards. Wait until the run has an implement job.
+            started=""; run=""
+            for _ in $(seq 1 12); do
+              sleep 15
+              run=$(gh run list --repo "$REPO" --workflow factory-caller.yml --event workflow_dispatch --limit 5 \
+                --json databaseId,createdAt,conclusion --jq "[.[] | select(.createdAt >= \"$since\")] | last | .databaseId // empty")
+              [ -n "$run" ] || continue
+              if [ "$(gh run view "$run" --repo "$REPO" --json jobs --jq '[.jobs[] | select(.name | test("implement"))] | length')" -gt 0 ]; then started=yes; break; fi
+              [ "$(gh run view "$run" --repo "$REPO" --json status --jq .status)" = "completed" ] && break
+            done
+            if [ -n "$started" ]; then
+              gh issue comment "$parent" --repo "$REPO" --body "Started part #$next."
+            else
+              gh issue edit "$next" --repo "$REPO" --remove-label ready-for-agent --add-label ready-for-human
+              gh issue comment "$parent" --repo "$REPO" --body "@$OWNER Part #$next did not start: the dispatched run ${run:+$GITHUB_SERVER_URL/$REPO/actions/runs/$run }never reached its implement job. Fix the cause, then relabel #$next \`ready-for-agent\`."
+            fi
           elif [ "$parent" != "$N" ]; then
             open=$(gh issue list --repo "$REPO" --state open --limit 100 --json body --jq "[.[] | select(.body | contains(\"$marker\"))] | length")
             [ "$open" = "0" ] && gh issue close "$parent" --repo "$REPO" --comment "All parts merged."

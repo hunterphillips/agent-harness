@@ -146,6 +146,7 @@ jobs:
           echo "run.json: $(wc -c < "$RUNNER_TEMP/run.json") bytes; logs: $(wc -l < "$RUNNER_TEMP/failed-logs.txt") lines"
       - uses: anthropics/claude-code-action@v1
         with:
+          allowed_bots: claude[bot],github-actions # failures on main after a factory merge
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: |
             https://github.com/hunterphillips/agent-harness.git
@@ -232,6 +233,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         timeout-minutes: 45
         with:
+          allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: |
             https://github.com/hunterphillips/agent-harness.git
@@ -253,6 +255,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         timeout-minutes: 45
         with:
+          allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: |
             https://github.com/hunterphillips/agent-harness.git
@@ -274,6 +277,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         timeout-minutes: 45
         with:
+          allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: |
             https://github.com/hunterphillips/agent-harness.git
@@ -295,6 +299,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         timeout-minutes: 45
         with:
+          allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: |
             https://github.com/hunterphillips/agent-harness.git
@@ -321,6 +326,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         timeout-minutes: 15
         with:
+          allowed_bots: github-actions
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           settings: ${{ env.SETTINGS }}
           prompt: |

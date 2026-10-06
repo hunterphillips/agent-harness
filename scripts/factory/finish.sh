@@ -99,9 +99,6 @@ if ! gh pr merge "$pr" --repo "$REPO" --squash --delete-branch > /dev/null; then
 fi
 set_status "$N" none
 sleep 5
-if [ "$(issue_state "$N")" = OPEN ]; then
-  gh issue close "$N" --repo "$REPO" --comment "Merged in PR #$pr." > /dev/null
-else
-  comment "$N" "Merged PR #$pr."
-fi
+# No "merged" comment: the merge and the close already notify the author.
+[ "$(issue_state "$N")" = OPEN ] && gh issue close "$N" --repo "$REPO" > /dev/null
 log "merged PR #$pr for #$N"

@@ -1,0 +1,23 @@
+# Static checks on the harness itself. Also what `gh pr checks` reports for the
+# factory's own PRs in this repo, so the merge gate's CI path runs here.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) latest . > /dev/null
+          ./actionlint -color
+      - name: shellcheck
+        run: shellcheck -x -P SCRIPTDIR scripts/*.sh scripts/factory/*.sh
+      - name: skills
+        run: scripts/check-skills.sh

@@ -35,7 +35,7 @@ Read ONLY the resolved lane's files:
        --jq ".[] | \"#\\(.number) · \\(.title) · $l · \\(.updatedAt[:10])\""
    done
    ```
-   (one call per label: `--label a,b` means *all* of those labels, not any.) One-liners alongside the local tickets; don't load bodies until one is chosen. Taking one up adds `in-progress` (`gh issue edit <n> --add-label in-progress`) and removes it when the work lands or is dropped.
+   (one call per label: `--label a,b` means *all* of those labels, not any.) One-liners alongside the local tickets; don't load bodies until one is chosen. Taking one up sets `in-progress` as the only status label (`gh issue edit <n> --add-label in-progress --remove-label ready-for-agent,ready-for-human,needs-info,wait`) and removes it when the work lands or is dropped.
    Also list open pull requests, since factory runs and other sessions land their work as PRs that nobody watches between sessions:
    ```bash
    gh pr list --state open --json number,title,headRefName,isDraft,updatedAt \

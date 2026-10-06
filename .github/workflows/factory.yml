@@ -1,7 +1,8 @@
 # Reusable factory jobs. Enrolled repos call this from their own
-# .github/workflows/factory-caller.yml (written by scripts/enroll-repo.sh) with
-# `secrets: inherit`, so CLAUDE_CODE_OAUTH_TOKEN comes from the calling repo.
-# The harness reaches the runner as the `harness` plugin; skills are /harness:<name>.
+# .github/workflows/factory-caller.yml (written by scripts/enroll-repo.sh).
+# The harness reaches the runner twice: as the `harness` plugin for the agent
+# (skills are /harness:<name>) and as a checkout at .harness for the mechanical
+# steps in scripts/factory/. Labels show state; dispatch starts work.
 name: factory-jobs
 on:
   workflow_call:
@@ -36,22 +37,40 @@ on:
         type: boolean
         required: false
         default: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+env:
+  SETTINGS: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
 
 jobs:
   triage:
     if: inputs.job == 'triage' && github.actor != 'claude[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     concurrency:
       group: factory-triage-${{ github.repository }}-${{ inputs.issue_number }}
       cancel-in-progress: false
     permissions:
+      actions: write # start the implement run when the gate passes
       contents: read
       issues: write
       pull-requests: read
       id-token: write
+    env:
+      N: ${{ inputs.issue_number }}
+      REPO: ${{ github.repository }}
+      OWNER: ${{ github.repository_owner }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: hunterphillips/agent-harness
+          ref: main # callers pin factory.yml@main; keep the scripts on the same ref
+          path: .harness
+          persist-credentials: false
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -59,7 +78,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
+          settings: ${{ env.SETTINGS }}
           prompt: |
             Triage issue #${{ inputs.issue_number }} in ${{ github.repository }}.
 
@@ -69,12 +88,29 @@ jobs:
             `gh issue edit` (labels) and `gh issue comment`. Create any missing label
             with `gh label create ... || true` before applying it.
 
-            Hard limits: do not modify files, commit, push, or open a pull request.
-            Exactly one status label and one comment at the end.
-          claude_args: "--model ${{ inputs.model }} --max-turns 40 --allowedTools Bash,Read,Glob,Grep,Skill,Agent"
+            Hard limits: do not modify files, commit, push, open a pull request, or
+            create issues. Exactly one status label and one comment at the end. If the
+            result is `ready-for-agent`, the workflow starts the implement run; you do not.
+          claude_args: >-
+            --model ${{ inputs.model }} --max-turns 40 --max-budget-usd 2
+            --permission-mode dontAsk
+            --allowedTools Bash,Read,Glob,Grep,Skill,Agent
+            --disallowedTools 'Bash(git push:*)' 'Bash(gh pr create:*)' 'Bash(gh pr merge:*)' 'Bash(gh issue create:*)'
+      - name: Start the implement run when triage passed
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source .harness/scripts/factory/lib.sh
+          status=$(status_of "$N")
+          [ "$status" = ready-for-agent ] || { echo "triage result: $status; nothing to start"; exit 0; }
+          .harness/scripts/factory/dispatch.sh "$N" || {
+            set_status "$N" ready-for-human
+            mention_owner "$N" "Triage passed, but the implement run did not start. Run: $RUN_URL"
+          }
 
   monitor:
-    if: inputs.job == 'monitor' && github.actor != 'claude[bot]'
+    if: inputs.job == 'monitor'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -115,7 +151,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
+          settings: ${{ env.SETTINGS }}
           prompt: |
             /harness:monitor
             Repository: ${{ github.repository }}
@@ -125,18 +161,22 @@ jobs:
             Failed job logs: ${{ runner.temp }}/failed-logs.txt
             Read both files first, then follow the monitor skill's steps exactly.
             ${{ inputs.auto_merge && 'AUTO-MERGE ALLOWED for a fix PR that meets the skill''s merge step.' || 'AUTO-MERGE NOT ALLOWED: leave any fix PR as a draft.' }}
-          claude_args: "--model ${{ inputs.model }} --max-turns 60 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"
+          claude_args: >-
+            --model ${{ inputs.model }} --max-turns 60 --max-budget-usd 5
+            --permission-mode dontAsk
+            --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write
 
   implement:
     if: inputs.job == 'implement' && github.actor != 'claude[bot]'
     runs-on: ubuntu-latest
-    # Up to four 45-minute attempts plus bookkeeping (GitHub's ceiling is 360).
-    timeout-minutes: 200
+    # Four 45-minute attempts, a 15-minute review, a finish step that may wait
+    # on CI, plus setup. GitHub's ceiling is 360.
+    timeout-minutes: 230
     concurrency:
       group: factory-issue-${{ github.repository }}-${{ inputs.issue_number }}
       cancel-in-progress: false
     permissions:
-      actions: write   # start the next part of a split issue (workflow_dispatch)
+      actions: write # start the next part of a split issue
       contents: write
       issues: write
       pull-requests: write
@@ -146,66 +186,49 @@ jobs:
     env:
       N: ${{ inputs.issue_number }}
       REPO: ${{ github.repository }}
-      BRANCH: claude/issue-${{ inputs.issue_number }}
       OWNER: ${{ github.repository_owner }}
+      BRANCH: claude/issue-${{ inputs.issue_number }}
+      AUTO_MERGE: ${{ inputs.auto_merge }}
+      MAX_ATTEMPTS: 4
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      AGENT_ARGS: "--model ${{ inputs.model }} --max-turns 120 --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write"
+      FACTORY: .harness/scripts/factory
+      HARNESS: .harness
+      GH_TOKEN: ${{ github.token }}
+      AGENT_ARGS: >-
+        --model ${{ inputs.model }} --max-turns 120 --max-budget-usd 8
+        --permission-mode dontAsk
+        --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write
       AGENT_PROMPT: |
         Implement issue #${{ inputs.issue_number }} in ${{ github.repository }}.
 
         Invoke the Skill tool with `harness:coding`, then follow its routing table
         row for implementing one self-contained issue (the
-        `implement-issue/implement-issue.md` workflow) exactly, in order, including
-        the back-pressure check, the size check, claiming or resuming the branch,
-        the tdd rules, the repo's own checks, the code review on opus, and the PR
-        that closes the issue. Never push to the default branch directly.
-      # Runs after each attempt. Saves uncommitted work to the issue branch, then
-      # allows another attempt only if this one moved the branch and the issue is
-      # still in-progress. An attempt that adds nothing ends the loop.
-      CHECKPOINT: |
-        set +e
-        remote="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
-        if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ] && [ -n "$(git status --porcelain)" ]; then
-          git add -A
-          git commit -q -m "wip: checkpoint at the end of attempt $((ATTEMPTS + 1))"
-          git push -q "$remote" "HEAD:refs/heads/$BRANCH"
-        fi
-        head=$(git ls-remote "$remote" "refs/heads/$BRANCH" | cut -f1)
-        labels=$(gh issue view "$N" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')
-        inprog=0; case ",$labels," in *,in-progress,*) inprog=1 ;; esac
-        if [ -n "$head" ] && [ "$head" != "$LAST_HEAD" ] && [ "$inprog" = 1 ]; then go=true; else go=false; fi
-        echo "continue=$go" >> "$GITHUB_OUTPUT"
-        echo "LAST_HEAD=$head" >> "$GITHUB_ENV"
-        mkdir -p "$RUNNER_TEMP/transcripts"
-        [ -f "$RUNNER_TEMP/claude-execution-output.json" ] && cp "$RUNNER_TEMP/claude-execution-output.json" "$RUNNER_TEMP/transcripts/attempt-$((ATTEMPTS + 1)).json"
-        echo "ATTEMPTS=$((ATTEMPTS + 1))" >> "$GITHUB_ENV"
-        echo "attempt $((ATTEMPTS + 1)): branch head ${head:-none}, labels [$labels], continue=$go"
+        `implement-issue/implement-issue.md` workflow) exactly, in order. You are
+        already on branch `claude/issue-${{ inputs.issue_number }}`; the workflow
+        claimed it. The workflow owns labels, the merge gate, and the hand-off; you
+        own the code, the tests, the pull request text, and the marker files in
+        `.factory/` (`done`, `handoff`, `split`). Run everything in the foreground.
+        Never push to the default branch.
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: hunterphillips/agent-harness
+          ref: main # callers pin factory.yml@main; keep the scripts on the same ref
+          path: .harness
+          persist-credentials: false
       - name: Git identity for pushes
         run: |
           git config user.name "claude[bot]"
           git config user.email "41898282+claude[bot]@users.noreply.github.com"
-      # Auto-merge only for work the owner asked for: the issue's author is the
-      # repo owner, or the factory itself (monitor issues). Anyone else's issue
-      # gets a draft PR for human review. A part of a split issue is judged by its
-      # parent's author. Decided here, mechanically, not by the agent.
-      - name: Merge policy and starting state
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          parent=$(gh issue view "$N" --repo "$REPO" --json body --jq .body | sed -n 's/.*<!-- factory-part-of: \([0-9]*\) -->.*/\1/p' | head -1)
-          author=$(gh issue view "${parent:-$N}" --repo "$REPO" --json author --jq .author.login)
-          if [ "${{ inputs.auto_merge }}" = "true" ] && { [ "$author" = "$OWNER" ] || [ "$author" = "claude" ] || [ "$author" = "app/claude" ] || [ "$author" = "claude[bot]" ]; }; then
-            echo "MERGE_LINE=AUTO-MERGE ALLOWED: the issue author ($author) is the owner or the factory. Follow implement-issue's merge step." >> "$GITHUB_ENV"
-          else
-            echo "MERGE_LINE=AUTO-MERGE NOT ALLOWED (author: $author, auto_merge: ${{ inputs.auto_merge }}). Leave the PR as a draft for human review; skip the merge step." >> "$GITHUB_ENV"
-          fi
-          echo "LAST_HEAD=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" >> "$GITHUB_ENV"
-          echo "ATTEMPTS=0" >> "$GITHUB_ENV"
+      - id: pre
+        name: Preflight (policy, claim or resume, in-progress)
+        run: bash "$FACTORY/preflight.sh"
+
       - id: agent1
+        if: steps.pre.outputs.run == 'true'
         uses: anthropics/claude-code-action@v1
         timeout-minutes: 45
         with:
@@ -214,18 +237,17 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
+          settings: ${{ env.SETTINGS }}
           prompt: |
             ${{ env.AGENT_PROMPT }}
-            ${{ env.MERGE_LINE }}
-            Attempt 1 of 4.
+            ${{ steps.pre.outputs.merge_line }}
+            Attempt 1 of ${{ env.MAX_ATTEMPTS }}.
           claude_args: ${{ env.AGENT_ARGS }}
       - id: cp1
         name: Checkpoint after attempt 1
-        if: ${{ !cancelled() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ${{ env.CHECKPOINT }}
+        if: ${{ !cancelled() && steps.pre.outputs.run == 'true' }}
+        run: bash "$FACTORY/checkpoint.sh" 1 "${{ steps.agent1.outputs.execution_file }}"
+
       - id: agent2
         if: ${{ !cancelled() && steps.cp1.outputs.continue == 'true' }}
         uses: anthropics/claude-code-action@v1
@@ -236,18 +258,17 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
+          settings: ${{ env.SETTINGS }}
           prompt: |
             ${{ env.AGENT_PROMPT }}
-            ${{ env.MERGE_LINE }}
-            Attempt 2 of 4: an earlier attempt ran out of turns or time while making progress. Resume the branch.
+            ${{ steps.pre.outputs.merge_line }}
+            Attempt 2 of ${{ env.MAX_ATTEMPTS }}: the previous attempt ran out of turns or time while making progress. Resume the branch.
           claude_args: ${{ env.AGENT_ARGS }}
       - id: cp2
         name: Checkpoint after attempt 2
         if: ${{ !cancelled() && steps.cp1.outputs.continue == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ${{ env.CHECKPOINT }}
+        run: bash "$FACTORY/checkpoint.sh" 2 "${{ steps.agent2.outputs.execution_file }}"
+
       - id: agent3
         if: ${{ !cancelled() && steps.cp2.outputs.continue == 'true' }}
         uses: anthropics/claude-code-action@v1
@@ -258,18 +279,17 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
+          settings: ${{ env.SETTINGS }}
           prompt: |
             ${{ env.AGENT_PROMPT }}
-            ${{ env.MERGE_LINE }}
-            Attempt 3 of 4: earlier attempts ran out of turns or time while making progress. Resume the branch.
+            ${{ steps.pre.outputs.merge_line }}
+            Attempt 3 of ${{ env.MAX_ATTEMPTS }}: earlier attempts ran out of turns or time while making progress. Resume the branch.
           claude_args: ${{ env.AGENT_ARGS }}
       - id: cp3
         name: Checkpoint after attempt 3
         if: ${{ !cancelled() && steps.cp2.outputs.continue == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ${{ env.CHECKPOINT }}
+        run: bash "$FACTORY/checkpoint.sh" 3 "${{ steps.agent3.outputs.execution_file }}"
+
       - id: agent4
         if: ${{ !cancelled() && steps.cp3.outputs.continue == 'true' }}
         uses: anthropics/claude-code-action@v1
@@ -280,100 +300,53 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
+          settings: ${{ env.SETTINGS }}
           prompt: |
             ${{ env.AGENT_PROMPT }}
-            ${{ env.MERGE_LINE }}
-            FINAL ATTEMPT (4 of 4): resume the branch and follow implement-issue's final-attempt rule. Start no new work.
+            ${{ steps.pre.outputs.merge_line }}
+            FINAL ATTEMPT (${{ env.MAX_ATTEMPTS }} of ${{ env.MAX_ATTEMPTS }}): resume the branch and follow implement-issue's final-attempt rule. Start no new work.
           claude_args: ${{ env.AGENT_ARGS }}
       - id: cp4
         name: Checkpoint after attempt 4
         if: ${{ !cancelled() && steps.cp3.outputs.continue == 'true' }}
+        run: bash "$FACTORY/checkpoint.sh" 4 "${{ steps.agent4.outputs.execution_file }}"
+
+      # The merge gate: an independent review whose verdict is machine-readable.
+      - id: rp
+        name: Review prompt
+        if: ${{ !cancelled() && steps.pre.outputs.run == 'true' && hashFiles('.factory/done') != '' }}
+        run: bash "$FACTORY/review-prompt.sh"
+      - id: review
+        if: ${{ !cancelled() && steps.rp.outcome == 'success' }}
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: 15
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: ${{ env.SETTINGS }}
+          prompt: |
+            Read `.factory/review-prompt.md` and do exactly what it says. You are the
+            merge gate for branch `claude/issue-${{ inputs.issue_number }}`: review the
+            diff, change nothing, and return the verdict as structured output.
+          claude_args: >-
+            --model claude-opus-5-5 --max-turns 40 --max-budget-usd 5
+            --permission-mode dontAsk
+            --allowedTools Read,Glob,Grep 'Bash(git diff:*)' 'Bash(git log:*)' 'Bash(git show:*)'
+            --json-schema '{"type":"object","properties":{"critical":{"type":"integer"},"important":{"type":"integer"},"summary":{"type":"string"}},"required":["critical","important","summary"]}'
+
+      - name: Finish (merge, split, or hand off)
+        if: ${{ always() && steps.pre.outputs.run == 'true' }}
+        timeout-minutes: 25
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: ${{ env.CHECKPOINT }}
-      # Every run ends in a state Hunter can see: merged, split, or a draft with
-      # the reason on the issue. If the issue is still in-progress here, the
-      # attempts stalled or ran out; finish the bookkeeping mechanically.
-      - name: Make sure the run left a visible outcome
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          labels=$(gh issue view "$N" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')
-          case ",$labels," in *,in-progress,*) ;; *) echo "issue already left in-progress; nothing to do"; exit 0;; esac
-          base=$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)
-          pr=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
-          ahead=$(gh api "repos/$REPO/compare/$base...$BRANCH" --jq .ahead_by 2>/dev/null || echo 0)
-          if [ -z "$pr" ] && [ "${ahead:-0}" -gt 0 ]; then
-            pr=$(gh pr create --repo "$REPO" --draft --base "$base" --head "$BRANCH" \
-              --title "Issue #$N (run ended before finishing)" \
-              --body "Closes #$N. The implement run pushed $ahead commit(s) but ended before opening its PR. Run: $RUN_URL" | grep -o '[0-9]*$')
-          fi
-          if [ "${ATTEMPTS:-0}" -ge 4 ]; then why="all four attempts ran out without finishing"
-          else why="attempt ${ATTEMPTS:-1} ended without adding any commits"; fi
-          if [ -n "$pr" ]; then
-            msg="@$OWNER The implement run stopped: $why. PR #$pr is a draft and was not merged. A fresh \`ready-for-agent\` label resumes the branch. Run: $RUN_URL"
-          else
-            msg="@$OWNER The implement run stopped: $why, and no work was pushed. Run: $RUN_URL"
-          fi
-          gh issue edit "$N" --repo "$REPO" --remove-label in-progress,ready-for-agent --add-label ready-for-human
-          gh issue comment "$N" --repo "$REPO" --body "$msg"
-      # A split issue's parts run one at a time: start the next waiting part when
-      # this run split its issue or merged a part, and close the parent once the
-      # last part merges. Dispatch, because label events from the factory's own
-      # token start no workflows.
+          REVIEW_JSON: ${{ steps.review.outputs.structured_output }}
+        run: bash "$FACTORY/finish.sh"
       - name: Start the next part of a split issue
-        if: ${{ !cancelled() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          sleep 5   # let a merge's auto-close land
-          view=$(gh issue view "$N" --repo "$REPO" --json body,state,labels)
-          parent=$(jq -r .body <<<"$view" | sed -n 's/.*<!-- factory-part-of: \([0-9]*\) -->.*/\1/p' | head -1)
-          if [ -n "$parent" ]; then
-            [ "$(jq -r .state <<<"$view")" = "CLOSED" ] || { echo "part #$N is still open; the chain waits"; exit 0; }
-          else
-            jq -e '[.labels[].name] | index("wait")' <<<"$view" >/dev/null || { echo "not a split issue"; exit 0; }
-            parent=$N
-          fi
-          marker="<!-- factory-part-of: $parent -->"
-          next=$(gh issue list --repo "$REPO" --state open --label wait --limit 100 --json number,body \
-            --jq "[.[] | select(.body | contains(\"$marker\")) | .number] | sort | .[0] // empty")
-          if [ -n "$next" ]; then
-            base=$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)
-            gh issue edit "$next" --repo "$REPO" --remove-label wait --add-label ready-for-agent
-            since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            gh workflow run factory-caller.yml --repo "$REPO" --ref "$base" -f issue_number="$next"
-            # gh exits 0 once the dispatch is accepted; a run that fails at startup
-            # only shows up afterwards. Wait until the run has an implement job.
-            started=""; run=""
-            for _ in $(seq 1 12); do
-              sleep 15
-              run=$(gh run list --repo "$REPO" --workflow factory-caller.yml --event workflow_dispatch --limit 5 \
-                --json databaseId,createdAt,conclusion --jq "[.[] | select(.createdAt >= \"$since\")] | last | .databaseId // empty")
-              [ -n "$run" ] || continue
-              if [ "$(gh run view "$run" --repo "$REPO" --json jobs --jq '[.jobs[] | select(.name | test("implement"))] | length')" -gt 0 ]; then started=yes; break; fi
-              [ "$(gh run view "$run" --repo "$REPO" --json status --jq .status)" = "completed" ] && break
-            done
-            if [ -n "$started" ]; then
-              gh issue comment "$parent" --repo "$REPO" --body "Started part #$next."
-            else
-              gh issue edit "$next" --repo "$REPO" --remove-label ready-for-agent --add-label ready-for-human
-              gh issue comment "$parent" --repo "$REPO" --body "@$OWNER Part #$next did not start: the dispatched run ${run:+$GITHUB_SERVER_URL/$REPO/actions/runs/$run }never reached its implement job. Fix the cause, then relabel #$next \`ready-for-agent\`."
-            fi
-          elif [ "$parent" != "$N" ]; then
-            open=$(gh issue list --repo "$REPO" --state open --limit 100 --json body --jq "[.[] | select(.body | contains(\"$marker\"))] | length")
-            [ "$open" = "0" ] && gh issue close "$parent" --repo "$REPO" --comment "All parts merged."
-          fi
-      # Each checkpoint copied its attempt's transcript into transcripts/.
+        if: ${{ !cancelled() && steps.pre.outputs.run == 'true' }}
+        run: bash "$FACTORY/next-part.sh"
       - name: Save the session transcripts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: implement-transcript-${{ inputs.issue_number }}
-          path: ${{ runner.temp }}/transcripts
+          path: .factory/transcripts
           if-no-files-found: ignore
           retention-days: 14

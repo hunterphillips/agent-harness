@@ -53,6 +53,8 @@ One status label per issue. Triage (the [triage workflow](../triage/triage.md), 
 - `in-progress` — added by whoever claims the issue (a cloud run or a local `pickup`); removed when the PR opens or the work is dropped
 - `monitor` — opened by the monitor job for a failed workflow run; one issue per failure signature, later occurrences append as comments
 
+Two rules keep the labels honest. Setting a status label always removes the others (the factory's steps do this through `scripts/factory/lib.sh set_status`; a prompt or a session does it with one `gh issue edit --add-label x --remove-label <the rest>`). And labels show state; they do not start work: the factory's own label changes fire no workflows, so the triage job and the parts chain start the implement run by `workflow_dispatch`, and a `ready-for-agent` label set by hand is the only label event that starts anything.
+
 ## Cloud contract
 
 Cloud runs (GitHub Actions, routines) see only the repository and its issues. They never see `thoughts/`, the vault, lane handoffs, or anything on the laptop. An issue that a cloud agent might work must therefore be self-contained: the observed behavior, how to reproduce it, where in the code it lives if known, and what done looks like. If a detail lives only in a local plan or ticket, copy it into the issue body.

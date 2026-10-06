@@ -1,0 +1,35 @@
+# Prove the factory end to end after any change to it: open a smoke issue in
+# this repo and wait for triage, the dispatched implement run, the merge, and
+# the close. Needs FACTORY_SMOKE_TOKEN, a fine-grained PAT of the owner's with
+# issues read/write on this repo, because the merge policy only merges
+# owner-authored issues. Without the secret the run skips itself.
+name: smoke
+run-name: factory smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/factory.yml
+      - .github/workflows/factory-caller.yml
+      - scripts/factory/**
+      - scripts/enroll-repo.sh
+      - skills/coding/implement-issue/**
+      - skills/coding/triage/**
+      - skills/coding/requesting-code-review/**
+permissions: {}
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the smoke
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_SMOKE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::FACTORY_SMOKE_TOKEN is not set; run scripts/factory/smoke.sh locally instead"
+            exit 0
+          fi
+          scripts/factory/smoke.sh

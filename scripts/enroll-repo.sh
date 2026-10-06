@@ -5,8 +5,7 @@
 #
 # Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement]
 #
-# --no-implement enrolls for triage and monitoring only (no ready-for-agent job);
-# cfo uses this until its unattended-host rule is revisited.
+# --no-implement enrolls for triage and monitoring only (no ready-for-agent job).
 #
 # The token is read from $CLAUDE_CODE_OAUTH_TOKEN, else ~/.config/factory/token
 # (one line, mode 600; generate it once with `claude setup-token`), else you are
@@ -70,7 +69,7 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   [[ "$(basename "$wf")" == "factory-caller.yml" ]] && continue
   n=$(sed -n 's/^name:[[:space:]]*//p' "$wf" | head -1 | tr -d '"'"'"'')
   [[ -n "$n" ]] || n=$(basename "$wf" | sed 's/\.ya\?ml$//')
-  [[ "$n" == "factory" || "$n" == "factory-jobs" ]] && continue   # the caller and the reusable jobs
+  [[ "$n" == "factory" || "$n" == "factory-jobs" || "$n" == "smoke" ]] && continue   # the caller, the reusable jobs, and the harness's own smoke (it reports itself)
   names+=("$n")
 done
 
@@ -80,10 +79,13 @@ cat <<'YAML'
 # Factory caller: delegates to the reusable jobs in hunterphillips/agent-harness.
 # Written by scripts/enroll-repo.sh in that repo; edit there, re-run to refresh.
 name: factory
+# Dispatched runs are found by this title (scripts/factory/dispatch.sh).
+run-name: "${{ github.event_name == 'workflow_run' && format('factory monitor {0}', github.event.workflow_run.name) || format('factory #{0}', inputs.issue_number || github.event.issue.number) }}"
 on:
   issues:
     types: [opened, labeled]
-  # The factory starts the next part of a split issue this way.
+  # The factory starts work by dispatch: triage on a gate pass, the next part
+  # of a split issue. Its own label events start nothing.
   workflow_dispatch:
     inputs:
       issue_number:
@@ -108,12 +110,18 @@ permissions:
   id-token: write
 jobs:
   triage:
-    if: github.repository == 'SLUG' && github.event_name == 'issues' && github.event.action == 'opened' && github.actor != 'claude[bot]'
+    if: >-
+      github.repository == 'SLUG' &&
+      github.event_name == 'issues' && github.event.action == 'opened' &&
+      github.actor != 'claude[bot]' &&
+      !contains(github.event.issue.labels.*.name, 'ready-for-agent') &&
+      !contains(github.event.issue.labels.*.name, 'in-progress')
     uses: hunterphillips/agent-harness/.github/workflows/factory.yml@main
     with:
       job: triage
       issue_number: ${{ github.event.issue.number }}
-    secrets: inherit
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 YAML
 if (( ${#names[@]} )); then
 cat <<'YAML'
@@ -130,7 +138,8 @@ cat <<'YAML'
       run_id: ${{ github.event.workflow_run.id }}
       run_url: ${{ github.event.workflow_run.html_url }}
       workflow_name: ${{ github.event.workflow_run.name }}
-    secrets: inherit
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 YAML
 fi
 if (( implement )); then
@@ -148,7 +157,8 @@ cat <<'YAML'
       job: implement
       model: claude-opus-5-5
       issue_number: ${{ github.event.issue.number || fromJSON(inputs.issue_number || '0') }}   # dispatch inputs arrive as strings
-    secrets: inherit
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 YAML
 fi
 } | sed "s|SLUG|$slug|g" > .github/workflows/factory-caller.yml

@@ -6,7 +6,7 @@ Runs locally when the user asks for an issue to be triaged, and headless as the 
 
 ## Steps
 
-1. **Read the issue and every comment.** Separate what was *observed* (error text, steps, screenshots, versions) from what the reporter *concluded* (where the bug is, what the fix is). The hypothesis is a lead, not a finding. If the issue already carries a triage label and nothing was added since the last triage comment, stop: it is done.
+1. **Read the issue and every comment.** Separate what was *observed* (error text, steps, screenshots, versions) from what the reporter *concluded* (where the bug is, what the fix is). The hypothesis is a lead, not a finding. If the issue already carries a triage label and nothing was added since the last triage comment, stop: it is done. If it is `in-progress`, stop without labeling or commenting: an implement run already owns it.
 2. **Classify** as one of: `bug` (existing behavior is wrong), `feature` (new behavior), `question` (needs an answer, not a change), `chore` (dependency, config, docs).
 3. **Inspect only the relevant code.** Grep for the error text, the command, or the component named; read the files it lands in; for a wide search, dispatch `codebase-locator`. Stop as soon as the classification and the gate can be answered. Do not attempt a fix, do not run the whole test suite, do not read the codebase for its own sake.
 4. **Run the gate** (every kind except `question`). Every check must pass:

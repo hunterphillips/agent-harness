@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 One failed workflow run in. One deduplicated issue out, plus a reviewed fix PR when the gate passes, merged when the PR proves the fix. Runs unattended on a GitHub Actions runner with the repo checked out at the default branch, `gh` authenticated, and these inputs in the prompt: repository, workflow name, run id and URL, a JSON file of run metadata, and a text file with the failed jobs' logs.
 
-Never read, print, or write secrets: no `env`, no `cat` of credential files, no token values in issues or PRs. A failure whose cause is a token, credential, or permission always ends as an issue naming the single human action.
+Run everything in the foreground: the session ends when you end your turn, and backgrounded work dies with it. Never read, print, or write secrets: no `env`, no `cat` of credential files, no token values in issues or PRs. A failure whose cause is a token, credential, or permission always ends as an issue naming the single human action.
 
 ## Steps
 

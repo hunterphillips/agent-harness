@@ -59,7 +59,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}}'
+          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
           prompt: |
             Triage issue #${{ inputs.issue_number }} in ${{ github.repository }}.
 
@@ -115,7 +115,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}}'
+          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
           prompt: |
             /harness:monitor
             Repository: ${{ github.repository }}
@@ -176,6 +176,8 @@ jobs:
         if [ -n "$head" ] && [ "$head" != "$LAST_HEAD" ] && [ "$inprog" = 1 ]; then go=true; else go=false; fi
         echo "continue=$go" >> "$GITHUB_OUTPUT"
         echo "LAST_HEAD=$head" >> "$GITHUB_ENV"
+        mkdir -p "$RUNNER_TEMP/transcripts"
+        [ -f "$RUNNER_TEMP/claude-execution-output.json" ] && cp "$RUNNER_TEMP/claude-execution-output.json" "$RUNNER_TEMP/transcripts/attempt-$((ATTEMPTS + 1)).json"
         echo "ATTEMPTS=$((ATTEMPTS + 1))" >> "$GITHUB_ENV"
         echo "attempt $((ATTEMPTS + 1)): branch head ${head:-none}, labels [$labels], continue=$go"
     steps:
@@ -212,7 +214,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}}'
+          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
           prompt: |
             ${{ env.AGENT_PROMPT }}
             ${{ env.MERGE_LINE }}
@@ -234,7 +236,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}}'
+          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
           prompt: |
             ${{ env.AGENT_PROMPT }}
             ${{ env.MERGE_LINE }}
@@ -256,7 +258,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}}'
+          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
           prompt: |
             ${{ env.AGENT_PROMPT }}
             ${{ env.MERGE_LINE }}
@@ -278,7 +280,7 @@ jobs:
             https://github.com/hunterphillips/agent-harness.git
           plugins: |
             harness@agent-harness
-          settings: '{"attribution": {"commit": "", "pr": ""}}'
+          settings: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
           prompt: |
             ${{ env.AGENT_PROMPT }}
             ${{ env.MERGE_LINE }}
@@ -349,15 +351,7 @@ jobs:
             open=$(gh issue list --repo "$REPO" --state open --limit 100 --json body --jq "[.[] | select(.body | contains(\"$marker\"))] | length")
             [ "$open" = "0" ] && gh issue close "$parent" --repo "$REPO" --comment "All parts merged."
           fi
-      - name: Collect the session transcripts
-        if: always()
-        run: |
-          mkdir -p "$RUNNER_TEMP/transcripts"
-          k=1
-          for f in "${{ steps.agent1.outputs.execution_file }}" "${{ steps.agent2.outputs.execution_file }}" "${{ steps.agent3.outputs.execution_file }}" "${{ steps.agent4.outputs.execution_file }}"; do
-            [ -n "$f" ] && [ -f "$f" ] && cp "$f" "$RUNNER_TEMP/transcripts/attempt-$k.json"
-            k=$((k + 1))
-          done
+      # Each checkpoint copied its attempt's transcript into transcripts/.
       - name: Save the session transcripts
         if: always()
         uses: actions/upload-artifact@v4

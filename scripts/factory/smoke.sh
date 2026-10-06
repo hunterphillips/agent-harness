@@ -42,6 +42,9 @@ while :; do
   case ",$labels," in
     *,ready-for-human,*|*,needs-info,*|*,wait,*) fail "issue left as [$labels] at stage $stage" ;;
   esac
+  if [ "$stage" = triage ] && [ -z "$labels" ] && gh issue view "$n" --repo "$REPO" --json comments --jq '.comments[].body' | grep -q '^\*\*Triage:\*\*'; then
+    fail "triage commented but left no status label"
+  fi
   case "$stage" in
     triage)
       case ",$labels," in *,ready-for-agent,*|*,in-progress,*) stage=implement; echo "triage passed" ;; esac ;;

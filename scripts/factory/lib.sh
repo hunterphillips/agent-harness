@@ -14,7 +14,7 @@ mkdir -p "$FACTORY_DIR/transcripts"
 
 log() { printf '%s\n' "$*" >&2; }
 
-state_get() { [ -f "$STATE_FILE" ] && sed -n "s/^$1=//p" "$STATE_FILE" | tail -1 || true; }
+state_get() { if [ -f "$STATE_FILE" ]; then sed -n "s/^$1=//p" "$STATE_FILE" | tail -1; fi; }
 state_set() {
   touch "$STATE_FILE"
   { grep -v "^$1=" "$STATE_FILE" || true; echo "$1=$2"; } > "$STATE_FILE.tmp"

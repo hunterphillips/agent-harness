@@ -43,6 +43,7 @@ After implementing a phase:
 - Fix any issues before proceeding
 - Update your progress in both the plan and your todos
 - Check off completed items in the plan file itself using Edit
+- If the phase or the plan's Docs section touches `CLAUDE.md`, `README.md`, or other top-level docs, invoke the `write-claude-md` skill instead of editing them by hand; a plan that lists literal CLAUDE.md edits is describing what changed, not how to write it
 - **Pause for human verification**: After completing all automated verification for a phase, pause and inform the human that the phase is ready for manual testing. Use this format:
   ```
   Phase [N] Complete - Ready for Manual Verification

@@ -115,6 +115,10 @@ Cite the behavior invariants (`B<n>`) from the design doc or PRD on the criteria
 
 [If applicable, how to handle existing data/systems]
 
+## Docs
+
+[What a reader of `CLAUDE.md`, `README.md`, or `docs/` needs to know after this plan: the new or moved component, the changed command, the dropped convention. List what changed, never the edits; the implementer refreshes those files with `/write-claude-md`, which keeps them short and cuts what is stale.]
+
 ## References
 
 - Original ticket: `thoughts/shared/tickets/eng_XXXX.md`

@@ -18,6 +18,8 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) latest . > /dev/null
           ./actionlint -color
       - name: shellcheck
-        run: shellcheck -S warning -x -P SCRIPTDIR scripts/*.sh scripts/factory/*.sh
+        run: shellcheck -S warning -x -P SCRIPTDIR scripts/*.sh scripts/factory/*.sh scripts/thoughts-sync/*.sh
       - name: skills
         run: scripts/check-skills.sh
+      - name: thoughts sync
+        run: scripts/thoughts-sync/test.sh

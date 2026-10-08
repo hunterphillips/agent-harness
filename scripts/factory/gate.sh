@@ -6,7 +6,7 @@
 # Usage: gate.sh <round>. Round 1 follows the attempts; round k+1 follows heal
 # round k. Env: N REPO BRANCH MAX_HEALS GH_TOKEN REVIEW_JSON (may be empty).
 # State written: GATE (clean|findings|checks_failed|no_ci|no_verdict|no_pr),
-# GATE_DETAIL, GATE_HEAD, HEALS. Output: heal (true|false).
+# GATE_DETAIL, GATE_HEAD, HEALS, CI_RERUN (head whose failed jobs were re-run once). Output: heal (true|false).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=lib.sh
@@ -84,6 +84,19 @@ if repo_has_pr_workflows; then
     verdict no_ci "no CI ran on ${head_sha:0:7} (the last push came from the workflow token)"
   fi
   if ! gh pr checks "$pr" --repo "$REPO" --watch --fail-fast > /dev/null; then
+    # One re-run of the failed jobs first: a timing or runner flake passes the
+    # second time, and a heal round cannot fix a flake. A real failure fails
+    # again and goes to the agent with its log.
+    if [ "$(state_get CI_RERUN)" != "$head" ]; then
+      state_set CI_RERUN "$head"
+      for run in $(gh run list --repo "$REPO" --commit "$head_sha" --status failure --limit 3 --json databaseId --jq '.[].databaseId'); do
+        gh run rerun "$run" --repo "$REPO" --failed > /dev/null 2>&1 && log "re-running failed jobs of run $run"
+      done
+      sleep 30
+      if gh pr checks "$pr" --repo "$REPO" --watch --fail-fast > /dev/null; then
+        verdict clean "review clean, checks green after one re-run"
+      fi
+    fi
     failed=$(gh pr checks "$pr" --repo "$REPO" --json name,state,link \
       --jq '[.[] | select(.state != "SUCCESS" and .state != "SKIPPED" and .state != "NEUTRAL")] | map("- \(.name): \(.state) \(.link)") | join("\n")')
     logs=""

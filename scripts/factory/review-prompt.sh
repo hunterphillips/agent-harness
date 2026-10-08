@@ -12,8 +12,17 @@ base=$(state_get BASE)
 head=$(git rev-parse HEAD)
 pr=$(pr_for_branch "$BRANCH")
 description=$( [ -n "$pr" ] && gh pr view "$pr" --repo "$REPO" --json body --jq .body || echo "(no pull request body)")
-requirements=$(gh issue view "$N" --repo "$REPO" --json title,body,comments \
-  --jq '"# \(.title)\n\n\(.body)\n\n" + ([.comments[] | "---\n\(.author.login):\n\(.body)"] | join("\n\n"))')
+issue_text() { # issue_text <n>: title, body, and every comment as markdown
+  gh issue view "$1" --repo "$REPO" --json title,body,comments \
+    --jq '"# \(.title)\n\n\(.body)\n\n" + ([.comments[] | "---\n\(.author.login):\n\(.body)"] | join("\n\n"))'
+}
+requirements=$(issue_text "$N")
+# A part is judged against its parent too: the parent holds the decisions and
+# the end state the parts share, so a scope call the parent settled is not a finding.
+parent=$(part_parent "$N")
+if [ -n "$parent" ]; then
+  requirements+=$(printf '\n\n# Parent issue #%s (decisions and end state shared by every part)\n\n%s' "$parent" "$(issue_text "$parent")")
+fi
 
 # Everything between the template's ``` fences after "prompt: |", with the
 # placeholders filled. awk strips the YAML indentation of the Agent-tool example.

@@ -3,7 +3,9 @@
 # (the workspace persists across attempts, so nothing is pushed here), and
 # decide whether another attempt runs. Another attempt runs only when this one
 # moved HEAD, left no marker file, and the issue is still open.
-# Usage: checkpoint.sh <attempt number> [execution file]. Env: N REPO MAX_ATTEMPTS.
+# Usage: checkpoint.sh <attempt number | heal-<k>> [execution file]. After a
+# heal round only the transcript and the leftover commit matter; gate.sh
+# decides what happens next. Env: N REPO MAX_ATTEMPTS.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=lib.sh
@@ -24,6 +26,10 @@ if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ] && [ -n "$(git status --
 fi
 
 head=$(git rev-parse HEAD)
+case "$k" in heal-*)
+  state_set LAST_HEAD "$head"; output continue false
+  log "$k: head ${head:0:7}"; exit 0 ;;
+esac
 last=$(state_get LAST_HEAD)
 marker=none
 for m in "done" handoff split; do [ -f "$FACTORY_DIR/$m" ] && marker=$m; done

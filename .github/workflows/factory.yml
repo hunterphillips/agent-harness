@@ -170,9 +170,10 @@ jobs:
   implement:
     if: inputs.job == 'implement' && github.actor != 'claude[bot]'
     runs-on: ubuntu-latest
-    # Four 45-minute attempts, a 15-minute review, a finish step that may wait
-    # on CI, plus setup. GitHub's ceiling is 360.
-    timeout-minutes: 230
+    # Four 45-minute attempts, then the merge gate: a 15-minute review, a gate
+    # step that may wait on CI, and up to two 30-minute heal rounds each
+    # followed by a fresh review and gate. GitHub's ceiling is 360.
+    timeout-minutes: 350
     concurrency:
       group: factory-issue-${{ github.repository }}-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -191,6 +192,7 @@ jobs:
       BRANCH: claude/issue-${{ inputs.issue_number }}
       AUTO_MERGE: ${{ inputs.auto_merge }}
       MAX_ATTEMPTS: 4
+      MAX_HEALS: 2
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       FACTORY: .harness/scripts/factory
       HARNESS: .harness
@@ -316,10 +318,13 @@ jobs:
         if: ${{ !cancelled() && steps.cp3.outputs.continue == 'true' }}
         run: bash "$FACTORY/checkpoint.sh" 4 "${{ steps.agent4.outputs.execution_file }}"
 
-      # The merge gate: an independent review whose verdict is machine-readable.
+      # The merge gate: an independent review whose verdict is machine-readable,
+      # then gate.sh, which records the verdict and asks for a heal round when
+      # the stop is checkable (findings, a failed check). Each heal round gets a
+      # fresh review. Attempts are unrolled above; heal rounds are unrolled here.
       - id: rp
         name: Review prompt
-        if: ${{ !cancelled() && steps.pre.outputs.run == 'true' && hashFiles('.factory/done') != '' }}
+        if: ${{ !cancelled() && steps.pre.outputs.run == 'true' && hashFiles('.factory/done') != '' && hashFiles('.factory/handoff') == '' }}
         run: bash "$FACTORY/review-prompt.sh"
       - id: review
         if: ${{ !cancelled() && steps.rp.outcome == 'success' }}
@@ -338,12 +343,115 @@ jobs:
             --permission-mode dontAsk
             --allowedTools Read,Glob,Grep 'Bash(git diff:*)' 'Bash(git log:*)' 'Bash(git show:*)'
             --json-schema '{"type":"object","properties":{"critical":{"type":"integer"},"important":{"type":"integer"},"summary":{"type":"string"}},"required":["critical","important","summary"]}'
+      - id: gate1
+        name: Gate round 1
+        if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
+        timeout-minutes: 30
+        env:
+          REVIEW_JSON: ${{ steps.review.outputs.structured_output }}
+        run: bash "$FACTORY/gate.sh" 1
+      - id: heal1
+        if: ${{ !cancelled() && steps.gate1.outputs.heal == 'true' }}
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: 30
+        with:
+          allowed_bots: github-actions
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: |
+            https://github.com/hunterphillips/agent-harness.git
+          plugins: |
+            harness@agent-harness
+          settings: ${{ env.SETTINGS }}
+          prompt: |
+            ${{ env.AGENT_PROMPT }}
+            ${{ steps.pre.outputs.merge_line }}
+            HEAL ROUND 1 of ${{ env.MAX_HEALS }}: the merge gate stopped this branch. Read `.factory/feedback.md` first and follow implement-issue's heal rule. Start no new work.
+          claude_args: ${{ env.AGENT_ARGS }}
+      - id: cph1
+        name: Checkpoint after heal round 1
+        if: ${{ !cancelled() && steps.gate1.outputs.heal == 'true' }}
+        run: bash "$FACTORY/checkpoint.sh" heal-1 "${{ steps.heal1.outputs.execution_file }}"
+      - id: rp2
+        name: Review prompt after heal round 1
+        if: ${{ !cancelled() && steps.cph1.outcome == 'success' && hashFiles('.factory/done') != '' && hashFiles('.factory/handoff') == '' }}
+        run: bash "$FACTORY/review-prompt.sh"
+      - id: review2
+        if: ${{ !cancelled() && steps.rp2.outcome == 'success' }}
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: 15
+        with:
+          allowed_bots: github-actions
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: ${{ env.SETTINGS }}
+          prompt: |
+            Read `.factory/review-prompt.md` and do exactly what it says. You are the
+            merge gate for branch `claude/issue-${{ inputs.issue_number }}`: review the
+            diff, change nothing, and return the verdict as structured output.
+          claude_args: >-
+            --model claude-opus-5-5 --max-turns 40 --max-budget-usd 5
+            --permission-mode dontAsk
+            --allowedTools Read,Glob,Grep 'Bash(git diff:*)' 'Bash(git log:*)' 'Bash(git show:*)'
+            --json-schema '{"type":"object","properties":{"critical":{"type":"integer"},"important":{"type":"integer"},"summary":{"type":"string"}},"required":["critical","important","summary"]}'
+      - id: gate2
+        name: Gate round 2
+        if: ${{ !cancelled() && steps.review2.outcome != 'skipped' }}
+        timeout-minutes: 30
+        env:
+          REVIEW_JSON: ${{ steps.review2.outputs.structured_output }}
+        run: bash "$FACTORY/gate.sh" 2
+      - id: heal2
+        if: ${{ !cancelled() && steps.gate2.outputs.heal == 'true' }}
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: 30
+        with:
+          allowed_bots: github-actions
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: |
+            https://github.com/hunterphillips/agent-harness.git
+          plugins: |
+            harness@agent-harness
+          settings: ${{ env.SETTINGS }}
+          prompt: |
+            ${{ env.AGENT_PROMPT }}
+            ${{ steps.pre.outputs.merge_line }}
+            HEAL ROUND 2 of ${{ env.MAX_HEALS }}: the merge gate stopped this branch. Read `.factory/feedback.md` first and follow implement-issue's heal rule. Start no new work.
+          claude_args: ${{ env.AGENT_ARGS }}
+      - id: cph2
+        name: Checkpoint after heal round 2
+        if: ${{ !cancelled() && steps.gate2.outputs.heal == 'true' }}
+        run: bash "$FACTORY/checkpoint.sh" heal-2 "${{ steps.heal2.outputs.execution_file }}"
+      - id: rp3
+        name: Review prompt after heal round 2
+        if: ${{ !cancelled() && steps.cph2.outcome == 'success' && hashFiles('.factory/done') != '' && hashFiles('.factory/handoff') == '' }}
+        run: bash "$FACTORY/review-prompt.sh"
+      - id: review3
+        if: ${{ !cancelled() && steps.rp3.outcome == 'success' }}
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: 15
+        with:
+          allowed_bots: github-actions
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: ${{ env.SETTINGS }}
+          prompt: |
+            Read `.factory/review-prompt.md` and do exactly what it says. You are the
+            merge gate for branch `claude/issue-${{ inputs.issue_number }}`: review the
+            diff, change nothing, and return the verdict as structured output.
+          claude_args: >-
+            --model claude-opus-5-5 --max-turns 40 --max-budget-usd 5
+            --permission-mode dontAsk
+            --allowedTools Read,Glob,Grep 'Bash(git diff:*)' 'Bash(git log:*)' 'Bash(git show:*)'
+            --json-schema '{"type":"object","properties":{"critical":{"type":"integer"},"important":{"type":"integer"},"summary":{"type":"string"}},"required":["critical","important","summary"]}'
+      - id: gate3
+        name: Gate round 3
+        if: ${{ !cancelled() && steps.review3.outcome != 'skipped' }}
+        timeout-minutes: 30
+        env:
+          REVIEW_JSON: ${{ steps.review3.outputs.structured_output }}
+        run: bash "$FACTORY/gate.sh" 3
 
       - name: Finish (merge, split, or hand off)
         if: ${{ always() && steps.pre.outputs.run == 'true' }}
-        timeout-minutes: 25
-        env:
-          REVIEW_JSON: ${{ steps.review.outputs.structured_output }}
+        timeout-minutes: 15
         run: bash "$FACTORY/finish.sh"
       - name: Start the next part of a split issue
         if: ${{ !cancelled() && steps.pre.outputs.run == 'true' }}

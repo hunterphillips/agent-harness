@@ -3,7 +3,7 @@
 # state. Merged (owner work, clean review, green checks), split (parts waiting,
 # parent on wait), or handed to a human with one mention naming the reason.
 # Never leaves in-progress on an open issue.
-# Env: N REPO OWNER BRANCH RUN_URL GH_TOKEN REVIEW_JSON (may be empty).
+# Env: N REPO OWNER BRANCH RUN_URL GH_TOKEN.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=lib.sh
@@ -61,36 +61,19 @@ if [ ! -f "$FACTORY_DIR/done" ]; then
   exit 0
 fi
 
-# The agent says it finished. The workflow decides what that is worth.
+# The agent says it finished. gate.sh judged the branch (review verdict, heal
+# rounds, checks); act on what it recorded.
 [ -n "$pr" ] || { hand_off "$N" "the run reported done but opened no pull request"; exit 0; }
 
-critical=$(jq -r '.critical // empty' <<< "${REVIEW_JSON:-}" 2> /dev/null || true)
-important=$(jq -r '.important // empty' <<< "${REVIEW_JSON:-}" 2> /dev/null || true)
-summary=$(jq -r '.summary // empty' <<< "${REVIEW_JSON:-}" 2> /dev/null || true)
-if [ -n "$critical" ]; then
-  gh pr comment "$pr" --repo "$REPO" --body "**Merge-gate review (opus):** critical $critical, important $important. $summary" > /dev/null
-fi
-
+gate=$(state_get GATE); detail=$(state_get GATE_DETAIL)
+case "$gate" in
+  clean) ;;
+  "") hand_off "$N" "the merge-gate review produced no verdict" "$pr"; exit 0 ;;
+  *) hand_off "$N" "$detail" "$pr"; exit 0 ;;
+esac
 if [ "$allowed" != true ]; then
   hand_off "$N" "auto-merge is not allowed for this issue, so PR #$pr awaits your review" "$pr"
   exit 0
-fi
-if [ -z "$critical" ]; then
-  hand_off "$N" "the merge-gate review produced no verdict" "$pr"; exit 0
-fi
-if [ "$critical" -gt 0 ] || [ "$important" -gt 0 ]; then
-  hand_off "$N" "the merge-gate review found $critical critical and $important important finding(s): $summary" "$pr"
-  exit 0
-fi
-
-head_sha=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid)
-if repo_has_pr_workflows; then
-  if [ "$(check_runs_on "$head_sha")" -eq 0 ]; then
-    hand_off "$N" "no CI ran on ${head_sha:0:7} (the last push came from the workflow token)" "$pr"; exit 0
-  fi
-  if ! gh pr checks "$pr" --repo "$REPO" --watch --fail-fast > /dev/null; then
-    hand_off "$N" "a check failed on PR #$pr" "$pr"; exit 0
-  fi
 fi
 
 gh pr ready "$pr" --repo "$REPO" > /dev/null

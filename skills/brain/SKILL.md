@@ -132,6 +132,17 @@ the system lane's business, checked on demand, not monthly). Scan for:
 No profile lookup is part of the audit or the drain: both work on the
 shape and provenance of notes, not on who Hunter is (decision 2026-09-19).
 
+Before flagging, verify against the freshest evidence:
+
+- **"Missing" or "no trace" findings**: also grep every lane inbox
+  (`~/workspace/**/thoughts/shared/lanes/*/inbox.md`) and every project's
+  `thoughts/shared/tickets/`, not only the vault. Routed items often land
+  in a lane inbox rather than a ticket.
+- **Contradictions involving a project**: read that project's newest
+  `kind: project-status` capture in `inbox/` (and its lane handoff if the
+  capture is older) first. If the newer status already resolves the
+  conflict, don't flag it.
+
 Write findings as a `- [ ]` checklist with file paths — the audit file IS
 the review queue. Before writing, read the previous month's audit file and
 carry forward any still-unchecked findings that still apply (labeled

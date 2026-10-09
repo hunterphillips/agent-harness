@@ -91,7 +91,8 @@ Distill unprocessed captures into durable notes. (Mid-session captures are disti
    `<repo>/thoughts/shared/tickets/YYYY-MM-DD-<slug>.md` in every target,
    frontmatter `created`, `status: backlog`, `area: routed capture`,
    `source: <vault inbox path>`, `captured:`, `trust:`, `routed_to: [stems]`.
-   `thoughts/` is gitignored everywhere, so no commit in the other repo.
+   `thoughts/` is gitignored everywhere, so no commit in the other repo; the
+   thoughts repo's Stop hook syncs the ticket.
    Never a GitHub issue: the tracker is fed by `to-issues`/`to-prd` or a
    plain request in a session, not by the brain.
    Mark the inbox file processed; name the target(s) in the commit message.

@@ -135,8 +135,10 @@ shape and provenance of notes, not on who Hunter is (decision 2026-09-19).
 Before flagging, verify against the freshest evidence:
 
 - **"Missing" or "no trace" findings**: also grep every lane inbox
-  (`~/workspace/**/thoughts/shared/lanes/*/inbox.md`) and every project's
-  `thoughts/shared/tickets/`, not only the vault. Routed items often land
+  (`~/workspace/thoughts/*/shared/lanes/*/inbox.md`) and every project's
+  tickets (`~/workspace/thoughts/*/shared/tickets/`), not only the vault.
+  Search the thoughts repo directly; per-project `thoughts/` folders are
+  symlinks into it. Routed items often land
   in a lane inbox rather than a ticket.
 - **Contradictions involving a project**: read that project's newest
   `kind: project-status` capture in `inbox/` (and its lane handoff if the

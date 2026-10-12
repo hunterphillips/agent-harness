@@ -45,8 +45,36 @@ env:
   SETTINGS: '{"attribution": {"commit": "", "pr": ""}, "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}'
 
 jobs:
+  author:
+    # Only the owner's issues start work. A part of a split issue is judged
+    # by its parent's author. The job answers through `ok`; triage and
+    # implement need it and skip when it is false.
+    if: (inputs.job == 'triage' || inputs.job == 'implement') && github.actor != 'claude[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      ok: ${{ steps.gate.outputs.ok }}
+    env:
+      N: ${{ inputs.issue_number }}
+      REPO: ${{ github.repository }}
+      OWNER: ${{ github.repository_owner }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: hunterphillips/agent-harness
+          ref: main # callers pin factory.yml@main; keep the scripts on the same ref
+          path: .harness
+          persist-credentials: false
+      - id: gate
+        run: bash .harness/scripts/factory/author-gate.sh
+
   triage:
-    if: inputs.job == 'triage' && github.actor != 'claude[bot]'
+    needs: author
+    if: inputs.job == 'triage' && github.actor != 'claude[bot]' && needs.author.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -168,7 +196,8 @@ jobs:
             --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write
 
   implement:
-    if: inputs.job == 'implement' && github.actor != 'claude[bot]'
+    needs: author
+    if: inputs.job == 'implement' && github.actor != 'claude[bot]' && needs.author.outputs.ok == 'true'
     runs-on: ubuntu-latest
     # Four 45-minute attempts, then the merge gate: a 15-minute review, a gate
     # step that may wait on CI, and up to two 30-minute heal rounds each

@@ -40,11 +40,16 @@ Agent tool:
     - Is all planned functionality present?
 
     **Code quality:**
-    - Clean separation of concerns?
-    - Proper error handling?
+    - Clean separation of concerns, at the right layer, one source of truth?
+    - Error handling proportionate to what can actually fail? Defensive extras the
+      requirements don't call for (fallbacks, shims, retries, timeouts, checks for
+      impossible states) are findings too, not just missing checks.
     - Type safety where applicable?
-    - DRY without premature abstraction?
-    - Edge cases handled?
+    - DRY without premature abstraction? One-off flows left one-off?
+    - Edge cases the requirements name handled? Don't ask for ones nobody named.
+    - Comments say something the code doesn't? Flag ones that restate the code or
+      narrate the process.
+    - Where the implementer hit a wrong premise, was it fixed or patched around?
 
     **Architecture:**
     - Sound design decisions?
@@ -59,10 +64,11 @@ Agent tool:
     - All tests passing?
     - Tests well-scoped? Flag redundant, low-value, or brittle tests (e.g. asserting exact
       error strings, or enumerating trivial variations) — not just missing coverage.
+    - Production code that exists only to satisfy a test?
 
     **Production readiness:**
     - Migration strategy if schema changed?
-    - Backward compatibility considered?
+    - Backward compatibility where something depends on the old behavior?
     - Documentation complete?
     - No obvious bugs?
 
@@ -139,7 +145,7 @@ Agent tool:
 ### Strengths
 - Clean database schema with proper migrations (db.ts:15-42)
 - Comprehensive test coverage (18 tests, all edge cases)
-- Good error handling with fallbacks (summarizer.ts:85-92)
+- Error handling covers the two failure modes the spec names (summarizer.ts:85-92)
 
 ### Issues
 

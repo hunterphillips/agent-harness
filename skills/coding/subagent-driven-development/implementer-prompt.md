@@ -93,7 +93,7 @@ Agent tool:
     **Completeness:**
     - Did I fully implement everything in the spec?
     - Did I miss any requirements?
-    - Are there edge cases I didn't handle?
+    - Are there edge cases the task or its Behavior list names that I didn't handle?
 
     **Quality:**
     - Is this my best work?
@@ -101,9 +101,18 @@ Agent tool:
     - Is the code clean and maintainable?
 
     **Discipline:**
-    - Did I avoid overbuilding (YAGNI)?
-    - Did I only build what was requested?
+    - Did I only build what was requested, without generalizing a one-off flow or
+      handling edge cases nobody named?
     - Did I follow existing patterns in the codebase?
+    - Did I add defensive extras the task doesn't need: fallbacks, compatibility
+      shims, retries, timeouts, checks for states that can't occur? Remove them, or
+      name them in the report if you believe one is necessary.
+    - Did I keep one source of truth, at the right layer, with no code that syncs
+      copies of the same state?
+    - When something I was told turned out wrong, did I fix the premise or patch
+      around it? A workaround for a bad assumption is DONE_WITH_CONCERNS, not done.
+    - Do my comments say something the code doesn't? Cut ones that restate it or
+      narrate how the code came to be.
 
     **Testing:**
     - Do tests actually verify behavior (not just mock behavior)?
@@ -112,6 +121,7 @@ Agent tool:
       edge/error cases — without restating the implementation, enumerating trivial
       variations, or asserting on exact error-message strings?
     - Did I avoid over-testing? Prefer essential coverage over extensive coverage.
+    - Is there production code whose only reason to exist is a test?
 
     If you find issues during self-review, fix them now before reporting.
 

@@ -139,7 +139,7 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 When a reviewer (spec or quality) returns issues, **dispatch a fresh fix subagent** — do not assume you can resume the implementer. There is no reliable way to continue a previous agent's session, so re-feed the fix subagent what it needs: the original task text, what was built, the reviewer's specific findings, and the file paths / commit range. Then re-run the *same* reviewer on the result and repeat until it approves. (In this harness, re-review by continuing the same reviewer with `SendMessage` instead of dispatching a fresh one; it already holds the task and the first findings. Fall back to a fresh reviewer if the agent is gone.)
 
-The two stages pull in opposite directions by design: the **spec** stage rewards YAGNI (build only what was asked); the **quality** stage rewards robustness (edge cases, error handling). When a quality reviewer proposes work beyond the spec, that tension is expected — apply it if it's cheap and clearly right, otherwise push back with reasoning (see `requesting-code-review`).
+The two stages pull in opposite directions by design: the **spec** stage rewards YAGNI (build only what was asked); the **quality** stage rewards robustness (the edge cases and failures the requirements name, handled properly). Robustness is not more code: a quality reviewer flags defensive extras and speculative generality as readily as missing checks. When a quality reviewer proposes work beyond the spec, that tension is expected — apply it if it's cheap and clearly right, otherwise push back with reasoning (see `requesting-code-review`).
 
 ## Prompt Templates
 

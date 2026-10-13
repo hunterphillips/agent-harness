@@ -51,7 +51,7 @@ heal() { # heal <gate> <detail> <feedback body>: record and ask for a heal round
 # Commits the agent left unpushed reach the branch before anything is judged
 # on the PR head. Pushed with the workflow token, so CI does not run on them;
 # the no_ci verdict below catches that.
-remote_head=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+remote_head=$(remote_head_of "$BRANCH")
 if [ "$head" != "$remote_head" ]; then
   git push -q "$(remote_with_token)" "HEAD:refs/heads/$BRANCH" && log "pushed leftover commits"
 fi

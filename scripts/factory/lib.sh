@@ -27,6 +27,11 @@ output() { # output <key> <value>: a step output when run under Actions, else a 
 
 default_branch() { gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name; }
 remote_with_token() { echo "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"; }
+# The branch's head on GitHub, read with the workflow token. After an agent step
+# the checkout's `origin` carries the action's own token, which it revokes when
+# the step ends, so `git ls-remote origin` fails on a runner that kept nothing
+# else (seen on hub, 2026-10-13); the token URL works everywhere.
+remote_head_of() { git ls-remote "$(remote_with_token)" "refs/heads/$1" | cut -f1; }
 
 issue_state() { gh issue view "$1" --repo "$REPO" --json state --jq .state; }
 issue_labels() { gh issue view "$1" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")'; }

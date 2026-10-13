@@ -22,7 +22,7 @@ fi
 # the branch. Pushed with the workflow token, so CI does not run on it; that
 # only matters on the merge path, which checks for check runs below.
 if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ]; then
-  remote_head=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+  remote_head=$(remote_head_of "$BRANCH")
   if [ "$(git rev-parse HEAD)" != "$remote_head" ]; then
     git push -q "$(remote_with_token)" "HEAD:refs/heads/$BRANCH" && log "pushed leftover commits"
   fi

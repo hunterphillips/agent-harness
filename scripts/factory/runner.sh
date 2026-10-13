@@ -66,17 +66,19 @@ add() {
     --url "https://github.com/$slug" --token "$token" \
     --name "$name" --labels factory --work _work
 
+  # svc.sh runs as root from the runner directory; the home is 750, so enter it as root.
   if [ -z "$(service_of "$dir")" ]; then
-    (cd "$dir" && sudo ./svc.sh install "$user")
+    sudo env -C "$dir" ./svc.sh install "$user"
   fi
-  (cd "$dir" && sudo ./svc.sh start)
+  sudo env -C "$dir" ./svc.sh start
   echo "runner $name for $slug: $(systemctl is-active "$(service_of "$dir")")"
 }
 
 remove() {
   if [ -d "$dir" ]; then
     if [ -n "$(service_of "$dir")" ]; then
-      (cd "$dir" && { sudo ./svc.sh stop || true; } && sudo ./svc.sh uninstall)
+      sudo env -C "$dir" ./svc.sh stop || true
+      sudo env -C "$dir" ./svc.sh uninstall
     fi
     if sudo test -f "$dir/.runner"; then
       token=$(gh api -X POST "repos/$slug/actions/runners/remove-token" --jq .token)
@@ -91,10 +93,11 @@ remove() {
 }
 
 list() {
-  local d u svc url
-  for d in /home/factory-*/runner; do
+  local h d u svc url
+  for h in /home/factory-*; do
+    d="$h/runner"
     sudo test -f "$d/.runner" || continue
-    u=$(stat -c %U "$d")
+    u=$(basename "$h")
     svc=$(service_of "$d")
     url=$(sudo jq -r .gitHubUrl "$d/.runner")
     printf '%s\t%s\t%s\t%s\n' "$u" "$url" "${svc:-no service}" \

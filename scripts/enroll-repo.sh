@@ -3,22 +3,27 @@
 # CLAUDE_CODE_OAUTH_TOKEN secret, and write the caller workflow that delegates
 # to the reusable jobs in hunterphillips/agent-harness.
 #
-# Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement]
+# Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement] [--runner]
 #
 # --no-implement enrolls for triage and monitoring only (no ready-for-agent job).
+# --runner puts every job on the self-hosted runner on hub (labels self-hosted,
+# linux, factory; see scripts/factory/runner.sh). Refused for a public repo:
+# GitHub says self-hosted runners should almost never serve one, since any fork's
+# pull request could run code on the box.
 #
 # The token is read from $CLAUDE_CODE_OAUTH_TOKEN, else ~/.config/factory/token
 # (one line, mode 600; generate it once with `claude setup-token`), else you are
 # prompted. Pass --no-push to write the workflow without committing it.
 set -euo pipefail
 
-repo_path="${1:?usage: enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement]}"
+repo_path="${1:?usage: enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement] [--runner]}"
 shift
-push=1; implement=1
+push=1; implement=1; runner=0
 for arg in "$@"; do
   case "$arg" in
     --no-push) push=0 ;;
     --no-implement) implement=0 ;;
+    --runner) runner=1 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -26,6 +31,15 @@ cd "$repo_path"
 
 slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 echo "Enrolling $slug"
+
+# --runner only for private repos, checked before anything is created or set.
+if (( runner )); then
+  visibility=$(gh repo view --json visibility --jq .visibility)
+  if [[ "$visibility" != PRIVATE && "$visibility" != INTERNAL ]]; then
+    echo "  refusing --runner: $slug is $visibility, and a self-hosted runner on a public repo runs forks' code" >&2
+    exit 2
+  fi
+fi
 
 # 1. Labels (idempotent). Same vocabulary as skills/coding/to-issues/tracker-conventions.md.
 while IFS='|' read -r name color desc; do
@@ -73,6 +87,8 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   names+=("$n")
 done
 
+runs_on_line=""
+(( runner )) && runs_on_line="      runs_on: '[\"self-hosted\",\"linux\",\"factory\"]'"
 mkdir -p .github/workflows
 {
 cat <<'YAML'
@@ -161,8 +177,8 @@ cat <<'YAML'
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 YAML
 fi
-} | sed "s|SLUG|$slug|g" > .github/workflows/factory-caller.yml
-echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none}; implement job: $implement)"
+} | sed "s|SLUG|$slug|g" | awk -v line="$runs_on_line" '{ print } line != "" && /^      job: / { print line }' > .github/workflows/factory-caller.yml
+echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none}; implement job: $implement; runner: $runner)"
 
 if (( push )); then
   git add -f .github/workflows/factory-caller.yml   # -f: some repos ignore .github

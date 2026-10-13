@@ -3,6 +3,12 @@
 # The harness reaches the runner twice: as the `harness` plugin for the agent
 # (skills are /harness:<name>) and as a checkout at .harness for the mechanical
 # steps in scripts/factory/. Labels show state; dispatch starts work.
+#
+# anthropics/claude-code-action is pinned to a commit, not the floating v1 tag:
+# a v1 release once broke self-hosted runners (issue 1126). To bump it, resolve
+# the tag (gh api repos/anthropics/claude-code-action/git/ref/tags/v1, then
+# git/tags/<sha>), replace the SHA everywhere in this file, and run
+# scripts/factory/smoke.sh before pushing.
 name: factory-jobs
 on:
   workflow_call:
@@ -37,6 +43,11 @@ on:
         type: boolean
         required: false
         default: true
+      runs_on:
+        description: JSON for runs-on. Callers on the hub runner pass '["self-hosted","linux","factory"]' (written by enroll-repo.sh --runner); the default is a hosted runner.
+        type: string
+        required: false
+        default: '"ubuntu-latest"'
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
@@ -50,7 +61,7 @@ jobs:
     # by its parent's author. The job answers through `ok`; triage and
     # implement need it and skip when it is false.
     if: (inputs.job == 'triage' || inputs.job == 'implement') && github.actor != 'claude[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -63,6 +74,15 @@ jobs:
       OWNER: ${{ github.repository_owner }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Clean the runner
+        if: runner.environment == 'self-hosted'
+        run: |
+          # A persistent runner keeps the last job's checkout and the runner user's
+          # Claude state; the plugin marketplace cache makes the next run fail
+          # (anthropics/claude-code-action issue 983). Both go. Safe only because each
+          # runner has its own user and home (scripts/factory/runner.sh).
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+          rm -rf "$HOME/.claude" "$HOME/.claude.json"
       - uses: actions/checkout@v4
         with:
           repository: hunterphillips/agent-harness
@@ -75,7 +95,7 @@ jobs:
   triage:
     needs: author
     if: inputs.job == 'triage' && github.actor != 'claude[bot]' && needs.author.outputs.ok == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 20
     concurrency:
       group: factory-triage-${{ github.repository }}-${{ inputs.issue_number }}
@@ -92,6 +112,15 @@ jobs:
       OWNER: ${{ github.repository_owner }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Clean the runner
+        if: runner.environment == 'self-hosted'
+        run: |
+          # A persistent runner keeps the last job's checkout and the runner user's
+          # Claude state; the plugin marketplace cache makes the next run fail
+          # (anthropics/claude-code-action issue 983). Both go. Safe only because each
+          # runner has its own user and home (scripts/factory/runner.sh).
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+          rm -rf "$HOME/.claude" "$HOME/.claude.json"
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
@@ -99,7 +128,7 @@ jobs:
           ref: main # callers pin factory.yml@main; keep the scripts on the same ref
           path: .harness
           persist-credentials: false
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: |
@@ -139,7 +168,7 @@ jobs:
 
   monitor:
     if: inputs.job == 'monitor'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 45
     concurrency:
       group: factory-monitor-${{ github.repository }}-${{ inputs.workflow_name }}
@@ -153,6 +182,15 @@ jobs:
       statuses: read
       id-token: write
     steps:
+      - name: Clean the runner
+        if: runner.environment == 'self-hosted'
+        run: |
+          # A persistent runner keeps the last job's checkout and the runner user's
+          # Claude state; the plugin marketplace cache makes the next run fail
+          # (anthropics/claude-code-action issue 983). Both go. Safe only because each
+          # runner has its own user and home (scripts/factory/runner.sh).
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+          rm -rf "$HOME/.claude" "$HOME/.claude.json"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -172,7 +210,7 @@ jobs:
           gh run view ${{ inputs.run_id }} --log-failed 2>/dev/null | tail -c 40000 > "$RUNNER_TEMP/failed-logs.txt"
           [ -s "$RUNNER_TEMP/failed-logs.txt" ] || echo "(no failed-job logs available)" > "$RUNNER_TEMP/failed-logs.txt"
           echo "run.json: $(wc -c < "$RUNNER_TEMP/run.json") bytes; logs: $(wc -l < "$RUNNER_TEMP/failed-logs.txt") lines"
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         with:
           allowed_bots: claude[bot],github-actions # failures on main after a factory merge
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -198,7 +236,7 @@ jobs:
   implement:
     needs: author
     if: inputs.job == 'implement' && github.actor != 'claude[bot]' && needs.author.outputs.ok == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runs_on) }}
     # Four 45-minute attempts, then the merge gate: a 15-minute review, a gate
     # step that may wait on CI, and up to two 30-minute heal rounds each
     # followed by a fresh review and gate. GitHub's ceiling is 360.
@@ -242,6 +280,15 @@ jobs:
         `.factory/` (`done`, `handoff`, `split`). Run everything in the foreground.
         Never push to the default branch.
     steps:
+      - name: Clean the runner
+        if: runner.environment == 'self-hosted'
+        run: |
+          # A persistent runner keeps the last job's checkout and the runner user's
+          # Claude state; the plugin marketplace cache makes the next run fail
+          # (anthropics/claude-code-action issue 983). Both go. Safe only because each
+          # runner has its own user and home (scripts/factory/runner.sh).
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+          rm -rf "$HOME/.claude" "$HOME/.claude.json"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -261,7 +308,7 @@ jobs:
 
       - id: agent1
         if: steps.pre.outputs.run == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 45
         with:
           allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
@@ -283,7 +330,7 @@ jobs:
 
       - id: agent2
         if: ${{ !cancelled() && steps.cp1.outputs.continue == 'true' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 45
         with:
           allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
@@ -305,7 +352,7 @@ jobs:
 
       - id: agent3
         if: ${{ !cancelled() && steps.cp2.outputs.continue == 'true' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 45
         with:
           allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
@@ -327,7 +374,7 @@ jobs:
 
       - id: agent4
         if: ${{ !cancelled() && steps.cp3.outputs.continue == 'true' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 45
         with:
           allowed_bots: github-actions # dispatched runs (triage pass, next part) are started by the workflow token
@@ -357,7 +404,7 @@ jobs:
         run: bash "$FACTORY/review-prompt.sh"
       - id: review
         if: ${{ !cancelled() && steps.rp.outcome == 'success' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 15
         with:
           allowed_bots: github-actions
@@ -381,7 +428,7 @@ jobs:
         run: bash "$FACTORY/gate.sh" 1
       - id: heal1
         if: ${{ !cancelled() && steps.gate1.outputs.heal == 'true' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 30
         with:
           allowed_bots: github-actions
@@ -406,7 +453,7 @@ jobs:
         run: bash "$FACTORY/review-prompt.sh"
       - id: review2
         if: ${{ !cancelled() && steps.rp2.outcome == 'success' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 15
         with:
           allowed_bots: github-actions
@@ -430,7 +477,7 @@ jobs:
         run: bash "$FACTORY/gate.sh" 2
       - id: heal2
         if: ${{ !cancelled() && steps.gate2.outputs.heal == 'true' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 30
         with:
           allowed_bots: github-actions
@@ -455,7 +502,7 @@ jobs:
         run: bash "$FACTORY/review-prompt.sh"
       - id: review3
         if: ${{ !cancelled() && steps.rp3.outcome == 'success' }}
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         timeout-minutes: 15
         with:
           allowed_bots: github-actions

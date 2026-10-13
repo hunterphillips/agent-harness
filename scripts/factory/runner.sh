@@ -61,10 +61,17 @@ add() {
     echo "installed runner v$ver in $dir"
   fi
 
-  token=$(gh api -X POST "repos/$slug/actions/runners/registration-token" --jq .token)
-  sudo -u "$user" env -C "$dir" ./config.sh --unattended --replace \
-    --url "https://github.com/$slug" --token "$token" \
-    --name "$name" --labels factory --work _work
+  # config.sh refuses to run twice; an existing registration is kept (remove
+  # first to re-register). --replace covers a stale runner of the same name on
+  # GitHub's side.
+  if sudo test -f "$dir/.runner"; then
+    echo "runner already configured; keeping its registration"
+  else
+    token=$(gh api -X POST "repos/$slug/actions/runners/registration-token" --jq .token)
+    sudo -u "$user" env -C "$dir" ./config.sh --unattended --replace \
+      --url "https://github.com/$slug" --token "$token" \
+      --name "$name" --labels factory --work _work
+  fi
 
   # svc.sh runs as root from the runner directory; the home is 750, so enter it as root.
   if [ -z "$(service_of "$dir")" ]; then

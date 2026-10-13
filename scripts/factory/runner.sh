@@ -93,6 +93,8 @@ remove() {
     fi
   fi
   if id "$user" > /dev/null 2>&1; then
+    sudo pkill -u "$user" || true   # a stopped service can leave the listener behind
+    sleep 2
     sudo userdel -r "$user"
     echo "removed user $user and $home"
   fi

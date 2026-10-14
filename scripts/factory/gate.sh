@@ -6,7 +6,8 @@
 # Usage: gate.sh <round>. Round 1 follows the attempts; round k+1 follows heal
 # round k. Env: N REPO BRANCH MAX_HEALS GH_TOKEN REVIEW_JSON (may be empty).
 # State written: GATE (clean|findings|checks_failed|no_ci|no_verdict|no_pr),
-# GATE_DETAIL, GATE_HEAD, HEALS, CI_RERUN (head whose failed jobs were re-run once). Output: heal (true|false).
+# GATE_DETAIL, GATE_HEAD, HEALS, CI_RERUN (head whose failed jobs were re-run
+# once), TOKEN_PUSH (head the gate pushed itself). Output: heal (true|false).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=lib.sh
@@ -49,11 +50,14 @@ heal() { # heal <gate> <detail> <feedback body>: record and ask for a heal round
 [ -f "$FACTORY_DIR/done" ] || verdict no_verdict "the run did not report done"
 
 # Commits the agent left unpushed reach the branch before anything is judged
-# on the PR head. Pushed with the workflow token, so CI does not run on them;
-# the no_ci verdict below catches that.
+# on the PR head. Pushed with the workflow token, which starts no CI; the CI
+# section below turns that into a heal round that pushes once more.
 remote_head=$(remote_head_of "$BRANCH")
 if [ "$head" != "$remote_head" ]; then
-  git push -q "$(remote_with_token)" "HEAD:refs/heads/$BRANCH" && log "pushed leftover commits"
+  if git push -q "$(remote_with_token)" "HEAD:refs/heads/$BRANCH"; then
+    log "pushed leftover commits"
+    state_set TOKEN_PUSH "$head"   # only a push that landed can have started no CI
+  fi
 fi
 [ -n "$pr" ] || verdict no_pr "the run reported done but opened no pull request"
 
@@ -80,27 +84,40 @@ allowed=$(state_get MERGE_ALLOWED)
 
 if repo_has_pr_workflows; then
   head_sha=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid)
-  if [ "$(check_runs_on "$head_sha")" -eq 0 ]; then
-    verdict no_ci "no CI ran on ${head_sha:0:7} (the last push came from the workflow token)"
+  if [ "$(state_get TOKEN_PUSH)" = "$head" ]; then
+    heal no_ci "the last push came from the workflow token, which starts no CI" \
+      "## No CI on ${head_sha:0:7}
+
+The workflow pushed commits the attempt left unpushed, using its own token, and
+GitHub starts no checks from that token. Make one empty commit
+(\`git commit --allow-empty -m \"Run CI\"\`) and push it so the checks run on
+this branch. Change nothing else; the review was clean."
   fi
-  if ! gh pr checks "$pr" --repo "$REPO" --watch --fail-fast > /dev/null; then
+  runs=$(wait_for_ci_runs "$head_sha")
+  [ -n "$runs" ] || verdict no_ci "no CI ran on ${head_sha:0:7}"
+  ids=$(cut -d' ' -f1 <<< "$runs")
+  log "CI runs on ${head_sha:0:7}: $(tr '\n' ' ' <<< "$ids")"
+  # shellcheck disable=SC2086
+  if ! ci_passed $ids; then
     # One re-run of the failed jobs first: a timing or runner flake passes the
     # second time, and a heal round cannot fix a flake. A real failure fails
     # again and goes to the agent with its log.
     if [ "$(state_get CI_RERUN)" != "$head" ]; then
       state_set CI_RERUN "$head"
-      for run in $(gh run list --repo "$REPO" --commit "$head_sha" --status failure --limit 3 --json databaseId --jq '.[].databaseId'); do
+      for run in $ids; do
         gh run rerun "$run" --repo "$REPO" --failed > /dev/null 2>&1 && log "re-running failed jobs of run $run"
       done
       sleep 30
-      if gh pr checks "$pr" --repo "$REPO" --watch --fail-fast > /dev/null; then
+      # shellcheck disable=SC2086
+      if ci_passed $ids; then
         verdict clean "review clean, checks green after one re-run"
       fi
     fi
-    failed=$(gh pr checks "$pr" --repo "$REPO" --json name,state,link \
-      --jq '[.[] | select(.state != "SUCCESS" and .state != "SKIPPED" and .state != "NEUTRAL")] | map("- \(.name): \(.state) \(.link)") | join("\n")')
-    logs=""
-    for run in $(gh run list --repo "$REPO" --commit "$head_sha" --status failure --limit 3 --json databaseId --jq '.[].databaseId'); do
+    failed=""; logs=""
+    for run in $ids; do
+      line=$(gh api "repos/$REPO/actions/runs/$run" --jq '"- \(.name): \(.conclusion) \(.html_url)"')
+      case "$line" in *": success "*|*": skipped "*|*": neutral "*) continue ;; esac
+      failed+="$line"$'\n'
       logs+=$(printf '\n### run %s\n```\n%s\n```\n' "$run" "$(gh run view "$run" --repo "$REPO" --log-failed 2> /dev/null | tail -c 12000)")
     done
     heal checks_failed "a check failed on PR #$pr" \

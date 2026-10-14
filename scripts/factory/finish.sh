@@ -19,8 +19,8 @@ if [ "$(issue_state "$N")" != OPEN ]; then
 fi
 
 # Work the agent committed but did not push (a cut-off attempt) still reaches
-# the branch. Pushed with the workflow token, so CI does not run on it; that
-# only matters on the merge path, which checks for check runs below.
+# the branch. gate.sh made the same push before judging the head (and turns
+# its lack of CI into a heal round), so this one only matters off the merge path.
 if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ]; then
   remote_head=$(remote_head_of "$BRANCH")
   if [ "$(git rev-parse HEAD)" != "$remote_head" ]; then

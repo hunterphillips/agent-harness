@@ -73,20 +73,61 @@ pr_for_branch() { # open PR whose head is <branch>, or empty
   gh pr list --repo "$REPO" --head "$1" --state open --json number --jq '.[0].number // empty'
 }
 
-# True when some workflow other than the factory caller runs on pull requests,
-# so a PR with no check runs means CI did not run rather than CI does not exist.
-repo_has_pr_workflows() {
+# Paths of the workflows other than the factory's that run on pull requests,
+# one per line. Empty when the repo has none.
+pr_workflow_paths() {
   local p
   for p in $(gh api "repos/$REPO/actions/workflows" --jq '.workflows[] | select(.state == "active") | .path'); do
     case "$p" in *factory-caller.yml|*factory.yml) continue ;; esac
     if gh api "repos/$REPO/contents/$p" -H 'Accept: application/vnd.github.raw' 2> /dev/null | grep -qE '^\s*pull_request'; then
-      return 0
+      echo "$p"
     fi
   done
-  return 1
+}
+repo_has_pr_workflows() { [ -n "$(pr_workflow_paths)" ]; }
+
+# Workflow runs on <sha> other than the factory's own (the monitor's run
+# carries the failed run's head): "<id> <path> <conclusion>" per line. Needs
+# the full sha; GitHub matches head_sha exactly.
+ci_runs_on() {
+  gh api "repos/$REPO/actions/runs?head_sha=$1&per_page=100" \
+    --jq '.workflow_runs[] | select(.path | test("factory-caller\\.yml$|/factory\\.yml$") | not) | "\(.id) \(.path) \(.conclusion // "pending")"'
 }
 
-check_runs_on() { gh api "repos/$REPO/commits/$1/check-runs" --jq .total_count; }
+# Wait up to CI_RUN_WAIT seconds (default 120) for a run on <sha> from every
+# pull-request workflow. GitHub writes a run within seconds of the push; check
+# runs come later, when a runner takes the job, which is why the gate never
+# counts those (a queued job read as "no CI ran" on scout #57, 2026-10-08).
+# Prints whatever runs exist once every expected path has one or the wait is
+# over: a workflow whose path or branch filter skipped this PR only costs the
+# wait.
+wait_for_ci_runs() {
+  local sha=$1 waited=0 runs expected p missing
+  expected=$(pr_workflow_paths)
+  while :; do
+    runs=$(ci_runs_on "$sha")
+    missing=0
+    for p in $expected; do grep -q " $p " <<< "$runs" || missing=1; done
+    if { [ -n "$runs" ] && [ "$missing" -eq 0 ]; } || [ "$waited" -ge "${CI_RUN_WAIT:-120}" ]; then
+      printf '%s\n' "$runs"; return
+    fi
+    sleep 10; waited=$((waited + 10))
+  done
+}
+
+# ci_passed <run id>...: wait for every run; true when each concluded
+# success, skipped, or neutral. Conclusions are read back rather than taken
+# from `gh run watch`'s exit status, which treats skipped as a failure.
+ci_passed() {
+  local id ok=true c
+  for id in "$@"; do
+    gh run watch "$id" --repo "$REPO" > /dev/null 2>&1 || true
+    c=$(gh api "repos/$REPO/actions/runs/$id" --jq .conclusion)
+    log "run $id concluded $c"
+    case "$c" in success|skipped|neutral) ;; *) ok=false ;; esac
+  done
+  [ "$ok" = true ]
+}
 
 # Hand the issue to a human: one status label, one mention, nothing else.
 hand_off() { # hand_off <n> <reason> [pr]

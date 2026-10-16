@@ -105,8 +105,13 @@ this branch. Change nothing else; the review was clean."
   if ! ci_passed $ids; then
     # One re-run of the failed jobs first: a timing or runner flake passes the
     # second time, and a heal round cannot fix a flake. A real failure fails
-    # again and goes to the agent with its log.
-    if [ "$(state_get CI_RERUN)" != "$head" ]; then
+    # again and goes to the agent with its log. A run still queued has no
+    # failed jobs to re-run, and a second queued wait would outlast the step.
+    queued=false
+    for run in $ids; do
+      [ "$(gh api "repos/$REPO/actions/runs/$run" --jq .status)" = queued ] && queued=true
+    done
+    if [ "$queued" = false ] && [ "$(state_get CI_RERUN)" != "$head" ]; then
       state_set CI_RERUN "$head"
       for run in $ids; do
         gh run rerun "$run" --repo "$REPO" --failed > /dev/null 2>&1 && log "re-running failed jobs of run $run"
@@ -119,7 +124,7 @@ this branch. Change nothing else; the review was clean."
     fi
     failed=""; logs=""
     for run in $ids; do
-      line=$(gh api "repos/$REPO/actions/runs/$run" --jq '"- \(.name): \(.conclusion // "queued") \(.html_url)"')
+      line=$(gh api "repos/$REPO/actions/runs/$run" --jq '"- \(.name): \(.conclusion // .status) \(.html_url)"')
       case "$line" in *": success "*|*": skipped "*|*": neutral "*) continue ;; esac
       failed+="$line"$'\n'
       logs+=$(printf '\n### run %s\n```\n%s\n```\n' "$run" "$(gh run view "$run" --repo "$REPO" --log-failed 2> /dev/null | tail -c 12000)")

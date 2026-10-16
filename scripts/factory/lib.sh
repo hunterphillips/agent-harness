@@ -74,12 +74,14 @@ pr_for_branch() { # open PR whose head is <branch>, or empty
 }
 
 # Paths of the workflows other than the factory's that run on pull requests,
-# one per line. Empty when the repo has none.
+# one per line. Empty when the repo has none. The trigger grep matches a
+# `pull_request:` key, a `- pull_request` item, and an inline `on:` list or
+# map; scripts/enroll-repo.sh's runner guard uses the same expression.
 pr_workflow_paths() {
   local p
   for p in $(gh api "repos/$REPO/actions/workflows" --jq '.workflows[] | select(.state == "active") | .path'); do
     case "$p" in *factory-caller.yml|*factory.yml) continue ;; esac
-    if gh api "repos/$REPO/contents/$p" -H 'Accept: application/vnd.github.raw' 2> /dev/null | grep -qE '^\s*pull_request'; then
+    if gh api "repos/$REPO/contents/$p" -H 'Accept: application/vnd.github.raw' 2> /dev/null | grep -qE '^\s*(-\s*|on:.*[[:space:][,{])?pull_request'; then
       echo "$p"
     fi
   done

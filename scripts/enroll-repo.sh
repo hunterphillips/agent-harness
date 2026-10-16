@@ -6,8 +6,11 @@
 # Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement] [--runner]
 #
 # --no-implement enrolls for triage and monitoring only (no ready-for-agent job).
-# --runner puts every job on the self-hosted runner on hub (labels self-hosted,
-# linux, factory; see scripts/factory/runner.sh). Refused for a public repo:
+# --runner puts the factory's jobs on the repo's `factory` runner on hub (labels
+# self-hosted, linux, factory; installed by scripts/factory/runner.sh add). The
+# repo's own workflows run on its `checks` runner instead, and enrolling refuses
+# a pull-request workflow on the factory label. A --runner repo with no
+# pull-request workflow merges on the review alone. Refused for a public repo:
 # GitHub says self-hosted runners should almost never serve one, since any fork's
 # pull request could run code on the box.
 #
@@ -39,6 +42,21 @@ if (( runner )); then
     echo "  refusing --runner: $slug is $visibility, and a self-hosted runner on a public repo runs forks' code" >&2
     exit 2
   fi
+  # A pull-request workflow on the factory's own runner can never start while
+  # the implement job holds it, and the gate would wait on it for hours. Such
+  # workflows belong on the repo's checks runner.
+  # A grep, not a parser (the trigger expression is the one in lib.sh's
+  # pr_workflow_paths): it misses a multi-line runs-on and a pull-request job
+  # that comes from a reusable workflow, and it refuses a file whose
+  # pull-request job is on checks while a push-only job is on factory (move
+  # that job too). lib.sh's queued-run bound catches what this misses.
+  for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
+    [[ -f "$wf" && "$(basename "$wf")" != factory-caller.yml ]] || continue
+    if grep -qE '^\s*(-\s*|on:.*[[:space:][,{])?pull_request' "$wf" && grep -qE 'runs-on:.*\bfactory\b' "$wf"; then
+      echo "  refusing --runner: $wf runs on pull requests with the factory label; use [self-hosted, linux, checks]" >&2
+      exit 2
+    fi
+  done
 fi
 
 # 1. Labels (idempotent). Same vocabulary as skills/coding/to-issues/tracker-conventions.md.

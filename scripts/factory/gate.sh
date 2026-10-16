@@ -4,7 +4,10 @@
 # failed check) and a heal round is left, write .factory/feedback.md and ask
 # for one. A heal round that changed nothing ends the loop.
 # Usage: gate.sh <round>. Round 1 follows the attempts; round k+1 follows heal
-# round k. Env: N REPO BRANCH MAX_HEALS GH_TOKEN REVIEW_JSON (may be empty).
+# round k. Env: N REPO BRANCH MAX_HEALS GH_TOKEN REVIEW_JSON (may be empty);
+# optional CI_RUN_WAIT (default 120) and CI_QUEUE_WAIT (default 900), the
+# seconds lib.sh waits for CI runs to appear and, in total across every run
+# and the re-run, to leave `queued`.
 # State written: GATE (clean|findings|checks_failed|no_ci|no_verdict|no_pr),
 # GATE_DETAIL, GATE_HEAD, HEALS, CI_RERUN (head whose failed jobs were re-run
 # once), TOKEN_PUSH (head the gate pushed itself). Output: heal (true|false).
@@ -66,7 +69,9 @@ important=$(jq -r '.important // empty' <<< "${REVIEW_JSON:-}" 2> /dev/null || t
 summary=$(jq -r '.summary // empty' <<< "${REVIEW_JSON:-}" 2> /dev/null || true)
 [ -n "$critical" ] || verdict no_verdict "the merge-gate review produced no verdict"
 
-gh pr comment "$pr" --repo "$REPO" --body "**Merge-gate review (opus, round $round):** critical $critical, important $important. $summary" > /dev/null
+pr_checks=false; repo_has_pr_workflows && pr_checks=true
+note=""; [ "$pr_checks" = true ] || note=" No pull-request workflow in this repo; this review is the only check."
+gh pr comment "$pr" --repo "$REPO" --body "**Merge-gate review (opus, round $round):** critical $critical, important $important. $summary$note" > /dev/null
 
 if [ "$critical" -gt 0 ] || [ "$important" -gt 0 ]; then
   heal findings "the merge-gate review found $critical critical and $important important finding(s): $summary" \
@@ -82,7 +87,7 @@ fi
 allowed=$(state_get MERGE_ALLOWED)
 [ "$allowed" = true ] || verdict clean "the review is clean; auto-merge is not allowed, so PR #$pr awaits human review"
 
-if repo_has_pr_workflows; then
+if [ "$pr_checks" = true ]; then
   head_sha=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid)
   if [ "$(state_get TOKEN_PUSH)" = "$head" ]; then
     heal no_ci "the last push came from the workflow token, which starts no CI" \
@@ -101,8 +106,14 @@ this branch. Change nothing else; the review was clean."
   if ! ci_passed $ids; then
     # One re-run of the failed jobs first: a timing or runner flake passes the
     # second time, and a heal round cannot fix a flake. A real failure fails
-    # again and goes to the agent with its log.
-    if [ "$(state_get CI_RERUN)" != "$head" ]; then
+    # again and goes to the agent with its log. A run still queued has no
+    # failed jobs to re-run; the re-run's own queued wait draws on what is
+    # left of lib.sh's one queued budget.
+    queued=false
+    for run in $ids; do
+      [ "$(gh api "repos/$REPO/actions/runs/$run" --jq .status)" = queued ] && queued=true
+    done
+    if [ "$queued" = false ] && [ "$(state_get CI_RERUN)" != "$head" ]; then
       state_set CI_RERUN "$head"
       for run in $ids; do
         gh run rerun "$run" --repo "$REPO" --failed > /dev/null 2>&1 && log "re-running failed jobs of run $run"
@@ -115,7 +126,7 @@ this branch. Change nothing else; the review was clean."
     fi
     failed=""; logs=""
     for run in $ids; do
-      line=$(gh api "repos/$REPO/actions/runs/$run" --jq '"- \(.name): \(.conclusion) \(.html_url)"')
+      line=$(gh api "repos/$REPO/actions/runs/$run" --jq '"- \(.name): \(.conclusion // .status) \(.html_url)"')
       case "$line" in *": success "*|*": skipped "*|*": neutral "*) continue ;; esac
       failed+="$line"$'\n'
       logs+=$(printf '\n### run %s\n```\n%s\n```\n' "$run" "$(gh run view "$run" --repo "$REPO" --log-failed 2> /dev/null | tail -c 12000)")

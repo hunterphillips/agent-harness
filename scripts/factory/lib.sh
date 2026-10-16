@@ -74,12 +74,14 @@ pr_for_branch() { # open PR whose head is <branch>, or empty
 }
 
 # Paths of the workflows other than the factory's that run on pull requests,
-# one per line. Empty when the repo has none.
+# one per line. Empty when the repo has none. The trigger grep matches a
+# `pull_request:` key, a `- pull_request` item, and an inline `on:` list or
+# map; scripts/enroll-repo.sh's runner guard uses the same expression.
 pr_workflow_paths() {
   local p
   for p in $(gh api "repos/$REPO/actions/workflows" --jq '.workflows[] | select(.state == "active") | .path'); do
     case "$p" in *factory-caller.yml|*factory.yml) continue ;; esac
-    if gh api "repos/$REPO/contents/$p" -H 'Accept: application/vnd.github.raw' 2> /dev/null | grep -qE '^\s*pull_request'; then
+    if gh api "repos/$REPO/contents/$p" -H 'Accept: application/vnd.github.raw' 2> /dev/null | grep -qE '^\s*(-\s*|on:.*[[:space:][,{])?pull_request'; then
       echo "$p"
     fi
   done
@@ -117,10 +119,25 @@ wait_for_ci_runs() {
 
 # ci_passed <run id>...: wait for every run; true when each concluded
 # success, skipped, or neutral. Conclusions are read back rather than taken
-# from `gh run watch`'s exit status, which treats skipped as a failure.
+# from `gh run watch`'s exit status, which treats skipped as a failure. Time
+# spent waiting on queued runs draws on one budget of CI_QUEUE_WAIT seconds
+# (default 900) per process, shared by every run and every call, so several
+# stuck runs cannot add up past the gate step's timeout. A run still queued
+# once the budget is spent counts as failed, since the gate may be holding
+# the only runner that could take it.
+CI_QUEUE_WAITED=0
 ci_passed() {
-  local id ok=true c
+  local id ok=true c st
   for id in "$@"; do
+    while :; do
+      st=$(gh api "repos/$REPO/actions/runs/$id" --jq .status)
+      [ "$st" = queued ] || break
+      if [ "$CI_QUEUE_WAITED" -ge "${CI_QUEUE_WAIT:-900}" ]; then
+        log "run $id still queued; ${CI_QUEUE_WAITED}s of queued wait spent (is its runs-on label served while this job holds the runner?)"
+        ok=false; continue 2
+      fi
+      sleep 30; CI_QUEUE_WAITED=$((CI_QUEUE_WAITED + 30))
+    done
     gh run watch "$id" --repo "$REPO" > /dev/null 2>&1 || true
     c=$(gh api "repos/$REPO/actions/runs/$id" --jq .conclusion)
     log "run $id concluded $c"

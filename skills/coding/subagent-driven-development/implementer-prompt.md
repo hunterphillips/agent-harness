@@ -38,7 +38,7 @@ Agent tool:
     Once you're clear on requirements:
     1. Implement exactly what the task specifies
     2. Write tests (following TDD if task says to)
-    3. Verify implementation works
+    3. Verify with the test files for what you changed, not the full suites; the controller runs the suites at merge. Say in your report which files you ran and their counts.
     4. Commit your work
     5. Self-review (see below)
     6. Report back
@@ -129,6 +129,7 @@ Agent tool:
 
     When done, report:
     - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
+    - Never end your turn with work still running in the background; wait for it and report its result.
     - What you implemented (or what you attempted, if blocked)
     - What you tested and test results
     - Files changed

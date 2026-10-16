@@ -204,16 +204,21 @@ never manages it in two places:
 1. **The list: the dashboard.** `GET <hub>/api/goals` reads it;
    `POST <hub>/api/goals/changes` with one JSON op changes it. `<hub>` is
    `https://hub.tail5b13b5.ts.net` from the Mac (Tailscale) and
-   `http://127.0.0.1:4243` on hub. Ops: `add {title, section, why?, due?,
-   links?}`, `edit {id, title?, why?, due?, links?}`, `move {id, section,
-   order?}`, `done {id}`, `drop {id}`, `reopen {id}`. Sections: `now`,
+   `http://127.0.0.1:4243` on hub. Every call carries `-H "Authorization:
+   Bearer $(cat ~/.config/personal-assistant/token)"`; the file holds the
+   token of a device paired on hub for this machine, and a machine without it
+   needs its own pairing (a code from `bin/dashboard-pair` on hub, posted to
+   `/api/auth/pair` with `"transport": "bearer"`). Ops: `add {title, section,
+   why?, due?, links?}`, `edit {id, title?, why?, due?, links?}`, `move {id,
+   section, order?}`, `done {id}`, `drop {id}`, `reopen {id}`. Sections: `now`,
    `later`, `not-now`, `long-term`. Read first to get ids; use his words for
    `title` and `why`. A goal with a story links it as
    `notes/goals/<slug>.md`.
 2. **The story: `notes/goals/<slug>.md`.** Context and reasons he gives go
    in that goal's note (update beats create), dated, in his words.
 3. **The copy: re-render now.** `notes/current-priorities.md` is generated
-   and never edited by hand. Run `GOALS_URL=<hub>/api/goals node
+   and never edited by hand. Run `DASHBOARD_TOKEN=$(cat
+   ~/.config/personal-assistant/token) GOALS_URL=<hub>/api/goals node
    bin/brain-goals-render.mjs` in the vault (it must print `goals=ok` or
    `goals=unchanged`), then commit and push with the story note.
 4. **Only on his word.** Change a goal only when Hunter says so; never on an

@@ -119,21 +119,24 @@ wait_for_ci_runs() {
 
 # ci_passed <run id>...: wait for every run; true when each concluded
 # success, skipped, or neutral. Conclusions are read back rather than taken
-# from `gh run watch`'s exit status, which treats skipped as a failure. A run
-# queued for CI_QUEUE_WAIT seconds (default 900) counts as failed, since the
-# gate may be holding the only runner that could take it.
+# from `gh run watch`'s exit status, which treats skipped as a failure. Time
+# spent waiting on queued runs draws on one budget of CI_QUEUE_WAIT seconds
+# (default 900) per process, shared by every run and every call, so several
+# stuck runs cannot add up past the gate step's timeout. A run still queued
+# once the budget is spent counts as failed, since the gate may be holding
+# the only runner that could take it.
+CI_QUEUE_WAITED=0
 ci_passed() {
-  local id ok=true c waited st
+  local id ok=true c st
   for id in "$@"; do
-    waited=0
     while :; do
       st=$(gh api "repos/$REPO/actions/runs/$id" --jq .status)
       [ "$st" = queued ] || break
-      if [ "$waited" -ge "${CI_QUEUE_WAIT:-900}" ]; then
-        log "run $id still queued after ${waited}s (is its runs-on label served while this job holds the runner?)"
+      if [ "$CI_QUEUE_WAITED" -ge "${CI_QUEUE_WAIT:-900}" ]; then
+        log "run $id still queued; ${CI_QUEUE_WAITED}s of queued wait spent (is its runs-on label served while this job holds the runner?)"
         ok=false; continue 2
       fi
-      sleep 30; waited=$((waited + 30))
+      sleep 30; CI_QUEUE_WAITED=$((CI_QUEUE_WAITED + 30))
     done
     gh run watch "$id" --repo "$REPO" > /dev/null 2>&1 || true
     c=$(gh api "repos/$REPO/actions/runs/$id" --jq .conclusion)

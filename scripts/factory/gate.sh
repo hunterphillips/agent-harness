@@ -6,7 +6,8 @@
 # Usage: gate.sh <round>. Round 1 follows the attempts; round k+1 follows heal
 # round k. Env: N REPO BRANCH MAX_HEALS GH_TOKEN REVIEW_JSON (may be empty);
 # optional CI_RUN_WAIT (default 120) and CI_QUEUE_WAIT (default 900), the
-# seconds lib.sh waits for CI runs to appear and to leave `queued`.
+# seconds lib.sh waits for CI runs to appear and, in total across every run
+# and the re-run, to leave `queued`.
 # State written: GATE (clean|findings|checks_failed|no_ci|no_verdict|no_pr),
 # GATE_DETAIL, GATE_HEAD, HEALS, CI_RERUN (head whose failed jobs were re-run
 # once), TOKEN_PUSH (head the gate pushed itself). Output: heal (true|false).
@@ -106,7 +107,8 @@ this branch. Change nothing else; the review was clean."
     # One re-run of the failed jobs first: a timing or runner flake passes the
     # second time, and a heal round cannot fix a flake. A real failure fails
     # again and goes to the agent with its log. A run still queued has no
-    # failed jobs to re-run, and a second queued wait would outlast the step.
+    # failed jobs to re-run; the re-run's own queued wait draws on what is
+    # left of lib.sh's one queued budget.
     queued=false
     for run in $ids; do
       [ "$(gh api "repos/$REPO/actions/runs/$run" --jq .status)" = queued ] && queued=true

@@ -114,15 +114,10 @@ Agent tool:
     - Do my comments say something the code doesn't? Cut ones that restate it or
       narrate how the code came to be.
 
-    **Copy (any string a user will read: labels, notes, states, empty states,
-    descriptions, errors):**
-    - Is it written for someone who never read the spec? It names only what the
-      user can see labeled on screen or knows from outside the product. The
-      spec's own vocabulary for interface parts and internals never reaches the
-      screen, even when the spec spells the sentence out; rewrite it and say so.
-    - Does a control with a self-explanatory label carry no note under it?
-    - Does it address the user as "you", never by name and never as "I"?
-    - Would Apple, Notion, or Linear ship the sentence as it stands?
+    **Copy (any string a user will read):**
+    - Would an end user who is not the developer understand it? If a word only
+      makes sense to someone who read the spec, rewrite it, even when the spec
+      dictated the sentence, and say so.
 
     **Testing:**
     - Do tests actually verify behavior (not just mock behavior)?

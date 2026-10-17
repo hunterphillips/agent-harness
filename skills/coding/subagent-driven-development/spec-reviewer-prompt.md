@@ -57,13 +57,9 @@ Agent tool:
     - Did they solve the wrong problem?
     - Did they implement the right feature but wrong way?
 
-    **Copy the user will read (labels, notes, states, descriptions, errors):**
-    - Read every new or changed user-facing string as a stranger who never saw the
-      spec. Any word that names an interface part or an internal the way the spec
-      does (and that nothing on screen labels) is a defect, even when the spec
-      dictated the sentence: report it against the spec, not just the code.
-    - A note under a control whose label already says what it does is a defect.
-    - "I" or the user's name in an agent's description is a defect; it says "you".
+    **Copy the user will read:** would an end user who is not the developer
+    understand every new or changed string? A word that only makes sense to
+    someone who read the spec is a defect, even when the spec dictated it.
 
     **Verify by reading code, not by trusting report.**
 

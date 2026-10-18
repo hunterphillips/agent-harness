@@ -58,8 +58,10 @@ Agent tool:
     - Did they implement the right feature but wrong way?
 
     **Copy the user will read:** would an end user who is not the developer
-    understand every new or changed string? A word that only makes sense to
-    someone who read the spec is a defect, even when the spec dictated it.
+    understand every new or changed string, and would a well-made app say it
+    at all? A word that only makes sense to someone who read the spec is a
+    defect, even when the spec dictated it; so is a note under a control
+    whose label already says what it does.
 
     **Verify by reading code, not by trusting report.**
 

@@ -115,9 +115,10 @@ Agent tool:
       narrate how the code came to be.
 
     **Copy (any string a user will read):**
-    - Would an end user who is not the developer understand it? If a word only
-      makes sense to someone who read the spec, rewrite it, even when the spec
-      dictated the sentence, and say so.
+    - Would an end user who is not the developer understand it, and would a
+      well-made app say it at all? If a word only makes sense to someone who
+      read the spec, rewrite it, even when the spec dictated the sentence, and
+      say so. If the line adds nothing to the label above it, cut it.
 
     **Testing:**
     - Do tests actually verify behavior (not just mock behavior)?

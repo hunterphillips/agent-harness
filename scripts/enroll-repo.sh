@@ -3,7 +3,7 @@
 # CLAUDE_CODE_OAUTH_TOKEN secret, and write the caller workflow that delegates
 # to the reusable jobs in hunterphillips/agent-harness.
 #
-# Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement] [--runner]
+# Usage: scripts/enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement] [--runner] [--gate-minutes N]
 #
 # --no-implement enrolls for triage and monitoring only (no ready-for-agent job).
 # --runner puts the factory's jobs on the repo's `factory` runner on hub (labels
@@ -13,23 +13,38 @@
 # pull-request workflow merges on the review alone. Refused for a public repo:
 # GitHub says self-hosted runners should almost never serve one, since any fork's
 # pull request could run code on the box.
+# --gate-minutes N widens the merge gate's rounds (the wait for the PR's checks,
+# one re-run, each heal round) from the default 30 minutes, for a repo whose
+# suite runs longer; the implement job's cap becomes 270 + 5 × N. Hub repos
+# only (needs --runner): hosted runners stop a job at 360 minutes. 30 to 150.
 #
 # The token is read from $CLAUDE_CODE_OAUTH_TOKEN, else ~/.config/factory/token
 # (one line, mode 600; generate it once with `claude setup-token`), else you are
 # prompted. Pass --no-push to write the workflow without committing it.
 set -euo pipefail
 
-repo_path="${1:?usage: enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement] [--runner]}"
+repo_path="${1:?usage: enroll-repo.sh <path-to-local-clone> [--no-push] [--no-implement] [--runner] [--gate-minutes N]}"
 shift
-push=1; implement=1; runner=0
-for arg in "$@"; do
-  case "$arg" in
+push=1; implement=1; runner=0; gate_minutes=0
+while [ $# -gt 0 ]; do
+  case "$1" in
     --no-push) push=0 ;;
     --no-implement) implement=0 ;;
     --runner) runner=1 ;;
-    *) echo "unknown flag: $arg" >&2; exit 2 ;;
+    --gate-minutes) gate_minutes=${2:-}; shift ;;
+    --gate-minutes=*) gate_minutes=${1#--gate-minutes=} ;;
+    *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
+  shift
 done
+if [ "$gate_minutes" != 0 ]; then
+  if ! [[ "$gate_minutes" =~ ^[0-9]+$ ]] || (( gate_minutes < 30 || gate_minutes > 150 )); then
+    echo "--gate-minutes takes a whole number of minutes from 30 to 150 (got '$gate_minutes')" >&2; exit 2
+  fi
+  if (( ! runner )); then
+    echo "--gate-minutes needs --runner: a hosted runner stops a job at 360 minutes, so only a hub repo can hold a wider gate" >&2; exit 2
+  fi
+fi
 cd "$repo_path"
 
 slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
@@ -107,6 +122,9 @@ done
 
 runs_on_line=""
 (( runner )) && runs_on_line="      runs_on: '[\"self-hosted\",\"linux\",\"factory\"]'"
+# The gate window and the job cap it needs, on the implement job only.
+gate_lines=""
+(( gate_minutes )) && gate_lines=$(printf '      gate_minutes: %d\\n      job_minutes: %d' "$gate_minutes" $((270 + 5 * gate_minutes)))   # awk -v turns the \n into a newline
 mkdir -p .github/workflows
 {
 cat <<'YAML'
@@ -195,8 +213,8 @@ cat <<'YAML'
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 YAML
 fi
-} | sed "s|SLUG|$slug|g" | awk -v line="$runs_on_line" '{ print } line != "" && /^      job: / { print line }' > .github/workflows/factory-caller.yml
-echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none}; implement job: $implement; runner: $runner)"
+} | sed "s|SLUG|$slug|g" | awk -v line="$runs_on_line" -v gate="$gate_lines" '{ print } line != "" && /^      job: / { print line } gate != "" && /^      job: implement$/ { print gate }' > .github/workflows/factory-caller.yml
+echo "  wrote .github/workflows/factory-caller.yml (monitoring ${#names[@]} workflow(s): ${names[*]:-none}; implement job: $implement; runner: $runner; gate window: $(( gate_minutes ? gate_minutes : 30 )) min)"
 
 if (( push )); then
   git add -f .github/workflows/factory-caller.yml   # -f: some repos ignore .github

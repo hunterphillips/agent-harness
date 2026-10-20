@@ -124,10 +124,15 @@ wait_for_ci_runs() {
 # (default 900) per process, shared by every run and every call, so several
 # stuck runs cannot add up past the gate step's timeout. A run still queued
 # once the budget is spent counts as failed, since the gate may be holding
-# the only runner that could take it.
+# the only runner that could take it. When CI_DEADLINE is set (a reading of
+# $SECONDS, which the sourcing script shares), no wait goes past it: a run
+# not completed by then counts as failed and sets CI_UNFINISHED=1, so the
+# caller can say the window was too small instead of being killed mid-wait.
 CI_QUEUE_WAITED=0
+CI_UNFINISHED=0
+# shellcheck disable=SC2034  # CI_UNFINISHED is read by gate.sh after sourcing
 ci_passed() {
-  local id ok=true c st
+  local id ok=true c st left
   for id in "$@"; do
     while :; do
       st=$(gh api "repos/$REPO/actions/runs/$id" --jq .status)
@@ -136,14 +141,33 @@ ci_passed() {
         log "run $id still queued; ${CI_QUEUE_WAITED}s of queued wait spent (is its runs-on label served while this job holds the runner?)"
         ok=false; continue 2
       fi
+      if [ -n "${CI_DEADLINE:-}" ] && [ "$SECONDS" -ge "$CI_DEADLINE" ]; then
+        log "run $id still queued at the gate's deadline"
+        ok=false; CI_UNFINISHED=1; continue 2
+      fi
       sleep 30; CI_QUEUE_WAITED=$((CI_QUEUE_WAITED + 30))
     done
-    gh run watch "$id" --repo "$REPO" > /dev/null 2>&1 || true
+    if [ -n "${CI_DEADLINE:-}" ]; then
+      left=$((CI_DEADLINE - SECONDS)); [ "$left" -gt 0 ] || left=1
+      timeout "$left" gh run watch "$id" --repo "$REPO" > /dev/null 2>&1 || true
+    else
+      gh run watch "$id" --repo "$REPO" > /dev/null 2>&1 || true
+    fi
+    if [ "$(gh api "repos/$REPO/actions/runs/$id" --jq .status)" != completed ]; then
+      log "run $id still running at the gate's deadline"
+      ok=false; CI_UNFINISHED=1; continue
+    fi
     c=$(gh api "repos/$REPO/actions/runs/$id" --jq .conclusion)
     log "run $id concluded $c"
     case "$c" in success|skipped|neutral) ;; *) ok=false ;; esac
   done
   [ "$ok" = true ]
+}
+
+# run_seconds <id>: how long the run's latest attempt took, from GitHub's own
+# timestamps (the suite may have started during the review before the gate).
+run_seconds() {
+  gh api "repos/$REPO/actions/runs/$1" --jq '((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))'
 }
 
 # Hand the issue to a human: one status label, one mention, nothing else.

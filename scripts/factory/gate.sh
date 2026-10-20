@@ -7,10 +7,13 @@
 # round k. Env: N REPO BRANCH MAX_HEALS GH_TOKEN REVIEW_JSON (may be empty);
 # optional CI_RUN_WAIT (default 120) and CI_QUEUE_WAIT (default 900), the
 # seconds lib.sh waits for CI runs to appear and, in total across every run
-# and the re-run, to leave `queued`.
+# and the re-run, to leave `queued`; GATE_MINUTES (default 30), the step's
+# cap: the wait for CI stops three minutes short of it, and the re-run is
+# skipped when it would not finish.
 # State written: GATE (clean|findings|checks_failed|no_ci|no_verdict|no_pr),
 # GATE_DETAIL, GATE_HEAD, HEALS, CI_RERUN (head whose failed jobs were re-run
 # once), TOKEN_PUSH (head the gate pushed itself). Output: heal (true|false).
+# GATE is also checks_unfinished when a run outlasted the window.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=lib.sh
@@ -18,6 +21,8 @@ source "$(dirname "$0")/lib.sh"
 
 round=$1
 max_heals=${MAX_HEALS:-2}
+window=$(( ${GATE_MINUTES:-30} * 60 ))   # the step's cap in seconds; $SECONDS counts from the script's start
+export CI_DEADLINE=$(( window - 180 ))   # lib.sh stops watching here: three minutes for logs, feedback, and the verdict
 head=$(git rev-parse HEAD)
 pr=$(pr_for_branch "$BRANCH")
 
@@ -104,16 +109,27 @@ this branch. Change nothing else; the review was clean."
   log "CI runs on ${head_sha:0:7}: $(tr '\n' ' ' <<< "$ids")"
   # shellcheck disable=SC2086
   if ! ci_passed $ids; then
+    if [ "${CI_UNFINISHED:-0}" = 1 ]; then
+      verdict checks_unfinished "the checks on ${head_sha:0:7} were still running when the gate's ${GATE_MINUTES:-30}-minute window closed; this repo's suite needs a wider one (enroll-repo.sh --runner --gate-minutes N)"
+    fi
     # One re-run of the failed jobs first: a timing or runner flake passes the
     # second time, and a heal round cannot fix a flake. A real failure fails
     # again and goes to the agent with its log. A run still queued has no
     # failed jobs to re-run; the re-run's own queued wait draws on what is
-    # left of lib.sh's one queued budget.
-    queued=false
+    # left of lib.sh's one queued budget. A re-run takes about as long as the
+    # run it repeats (the run's own timestamps, since the suite may have
+    # started during the review), so when that much is not left before the
+    # deadline, skip it: a heal round can still fix the failure.
+    queued=false; longest=0
     for run in $ids; do
       [ "$(gh api "repos/$REPO/actions/runs/$run" --jq .status)" = queued ] && queued=true
+      t=$(run_seconds "$run"); [ "$t" -gt "$longest" ] && longest=$t
     done
-    if [ "$queued" = false ] && [ "$(state_get CI_RERUN)" != "$head" ]; then
+    rerun_note=""
+    if [ $((SECONDS + longest + 60)) -gt "$CI_DEADLINE" ]; then
+      rerun_note="The gate skipped its usual re-run of the failed jobs: the run took $((longest / 60)) minutes and the round's window of ${GATE_MINUTES:-30} could not hold another. If the failure looks like a flake, re-run that test yourself before changing code."
+      log "skipping the re-run: the run took ${longest}s with ${SECONDS}s of the ${window}s window spent"
+    elif [ "$queued" = false ] && [ "$(state_get CI_RERUN)" != "$head" ]; then
       state_set CI_RERUN "$head"
       for run in $ids; do
         gh run rerun "$run" --repo "$REPO" --failed > /dev/null 2>&1 && log "re-running failed jobs of run $run"
@@ -122,6 +138,9 @@ this branch. Change nothing else; the review was clean."
       # shellcheck disable=SC2086
       if ci_passed $ids; then
         verdict clean "review clean, checks green after one re-run"
+      fi
+      if [ "${CI_UNFINISHED:-0}" = 1 ]; then
+        verdict checks_unfinished "the re-run on ${head_sha:0:7} was still going when the gate's ${GATE_MINUTES:-30}-minute window closed; this repo's suite needs a wider one (enroll-repo.sh --runner --gate-minutes N)"
       fi
     fi
     failed=""; logs=""
@@ -134,7 +153,9 @@ this branch. Change nothing else; the review was clean."
     heal checks_failed "a check failed on PR #$pr" \
       "## Failed checks on ${head_sha:0:7}
 
-$failed
+${rerun_note:+$rerun_note
+
+}$failed
 $logs"
   fi
 fi

@@ -48,6 +48,16 @@ on:
         type: string
         required: false
         default: '"ubuntu-latest"'
+      gate_minutes:
+        description: Minutes a gate round (the wait for the PR's checks and one re-run) and a heal round may each run. The default fits a suite under about 12 minutes; a repo whose suite runs longer declares more with enroll-repo.sh --gate-minutes (hub repos only). job_minutes must grow with it.
+        type: number
+        required: false
+        default: 30
+      job_minutes:
+        description: Cap on the implement job. enroll-repo.sh writes 270 + 5 × gate_minutes for a declared window (the capped steps plus overhead); hosted runners stop a job at 360 regardless.
+        type: number
+        required: false
+        default: 350
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
@@ -238,9 +248,12 @@ jobs:
     if: inputs.job == 'implement' && github.actor != 'claude[bot]' && needs.author.outputs.ok == 'true'
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     # Four 45-minute attempts, then the merge gate: a 15-minute review, a gate
-    # step that may wait on CI, and up to two 30-minute heal rounds each
-    # followed by a fresh review and gate. GitHub's ceiling is 360.
-    timeout-minutes: 350
+    # round that waits on CI, and up to two heal rounds each followed by a
+    # fresh review and gate. Gate and heal rounds run gate_minutes each
+    # (default 30); the cap is job_minutes (default 350, which has fit every
+    # run so far; 270 + 5 × gate_minutes covers the longest path with its
+    # overhead). Hosted runners stop a job at 360.
+    timeout-minutes: ${{ inputs.job_minutes }}
     concurrency:
       group: factory-issue-${{ github.repository }}-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -422,14 +435,15 @@ jobs:
       - id: gate1
         name: Gate round 1
         if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
-        timeout-minutes: 30
+        timeout-minutes: ${{ inputs.gate_minutes }}
         env:
+          GATE_MINUTES: ${{ inputs.gate_minutes }}
           REVIEW_JSON: ${{ steps.review.outputs.structured_output }}
         run: bash "$FACTORY/gate.sh" 1
       - id: heal1
         if: ${{ !cancelled() && steps.gate1.outputs.heal == 'true' }}
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
-        timeout-minutes: 30
+        timeout-minutes: ${{ inputs.gate_minutes }}
         with:
           allowed_bots: github-actions
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -471,14 +485,15 @@ jobs:
       - id: gate2
         name: Gate round 2
         if: ${{ !cancelled() && steps.review2.outcome != 'skipped' }}
-        timeout-minutes: 30
+        timeout-minutes: ${{ inputs.gate_minutes }}
         env:
+          GATE_MINUTES: ${{ inputs.gate_minutes }}
           REVIEW_JSON: ${{ steps.review2.outputs.structured_output }}
         run: bash "$FACTORY/gate.sh" 2
       - id: heal2
         if: ${{ !cancelled() && steps.gate2.outputs.heal == 'true' }}
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
-        timeout-minutes: 30
+        timeout-minutes: ${{ inputs.gate_minutes }}
         with:
           allowed_bots: github-actions
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -520,8 +535,9 @@ jobs:
       - id: gate3
         name: Gate round 3
         if: ${{ !cancelled() && steps.review3.outcome != 'skipped' }}
-        timeout-minutes: 30
+        timeout-minutes: ${{ inputs.gate_minutes }}
         env:
+          GATE_MINUTES: ${{ inputs.gate_minutes }}
           REVIEW_JSON: ${{ steps.review3.outputs.structured_output }}
         run: bash "$FACTORY/gate.sh" 3
 

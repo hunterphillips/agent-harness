@@ -119,33 +119,29 @@ wait_for_ci_runs() {
 
 # ci_passed <run id>...: wait for every run; true when each concluded
 # success, skipped, or neutral. Conclusions are read back rather than taken
-# from `gh run watch`'s exit status, which treats skipped as a failure. Time
-# spent waiting on queued runs draws on one budget of CI_QUEUE_WAIT seconds
-# (default 900) per process, shared by every run and every call, so several
-# stuck runs cannot add up past the gate step's timeout. A run still queued
-# once the budget is spent counts as failed, since the gate may be holding
-# the only runner that could take it. When CI_DEADLINE is set (a reading of
-# $SECONDS, which the sourcing script shares), no wait goes past it: a run
-# not completed by then counts as failed and sets CI_UNFINISHED=1, so the
-# caller can say the window was too small instead of being killed mid-wait.
-CI_QUEUE_WAITED=0
+# from `gh run watch`'s exit status, which treats skipped as a failure. No
+# wait goes past CI_DEADLINE (a reading of $SECONDS, which the sourcing
+# script shares): a run not completed by then counts as failed and sets
+# CI_UNFINISHED=1, and one that never left `queued` also sets CI_QUEUED=1, so
+# the caller can say what happened instead of being killed mid-wait. A queued
+# run waits the whole window on purpose: the repo's checks runner serves main
+# pushes and other pull requests too (a suite ahead of ours is the common
+# case since 2026-10-20), and the shape that can never start (a workflow on
+# the label this job holds) still ends inside the window.
 CI_UNFINISHED=0
-# shellcheck disable=SC2034  # CI_UNFINISHED is read by gate.sh after sourcing
+CI_QUEUED=0
+# shellcheck disable=SC2034  # CI_UNFINISHED and CI_QUEUED are read by gate.sh after sourcing
 ci_passed() {
   local id ok=true c st left
   for id in "$@"; do
     while :; do
       st=$(gh api "repos/$REPO/actions/runs/$id" --jq .status)
       [ "$st" = queued ] || break
-      if [ "$CI_QUEUE_WAITED" -ge "${CI_QUEUE_WAIT:-900}" ]; then
-        log "run $id still queued; ${CI_QUEUE_WAITED}s of queued wait spent (is its runs-on label served while this job holds the runner?)"
-        ok=false; continue 2
-      fi
       if [ -n "${CI_DEADLINE:-}" ] && [ "$SECONDS" -ge "$CI_DEADLINE" ]; then
         log "run $id still queued at the gate's deadline"
-        ok=false; CI_UNFINISHED=1; continue 2
+        ok=false; CI_UNFINISHED=1; CI_QUEUED=1; continue 2
       fi
-      sleep 30; CI_QUEUE_WAITED=$((CI_QUEUE_WAITED + 30))
+      sleep 30
     done
     if [ -n "${CI_DEADLINE:-}" ]; then
       left=$((CI_DEADLINE - SECONDS)); [ "$left" -gt 0 ] || left=1

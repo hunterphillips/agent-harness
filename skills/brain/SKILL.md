@@ -208,11 +208,13 @@ never manages it in two places:
    Bearer $(cat ~/.config/personal-assistant/token)"`; the file holds the
    token of a device paired on hub for this machine, and a machine without it
    needs its own pairing (a code from `bin/dashboard-pair` on hub, posted to
-   `/api/auth/pair` with `"transport": "bearer"`). Ops: `add {title, section,
-   why?, due?, links?}`, `edit {id, title?, why?, due?, links?}`, `move {id,
-   section, order?}`, `done {id}`, `drop {id}`, `reopen {id}`. Sections: `now`,
-   `later`, `not-now`, `long-term`. Read first to get ids; use his words for
-   `title` and `why`. A goal with a story links it as
+   `/api/auth/pair` with `"transport": "bearer"`). Since 2026-10-21 the
+   goals are one list ordered by hand, the first the most important (no
+   sections). Ops: `add {title, why?, due?, links?}` (lands last), `edit
+   {id, title?, why?, due?, links?}`, `move {id, order}` with `order` every
+   active goal's id exactly once, top first, `done {id}`, `drop {id}`,
+   `reopen {id}` (lands last). Read first to get ids and the current order;
+   use his words for `title` and `why`. A goal with a story links it as
    `notes/goals/<slug>.md`.
 2. **The story: `notes/goals/<slug>.md`.** Context and reasons he gives go
    in that goal's note (update beats create), dated, in his words.

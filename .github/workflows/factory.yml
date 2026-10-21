@@ -177,7 +177,11 @@ jobs:
           }
 
   monitor:
-    if: inputs.job == 'monitor'
+    # The caller's event payload is visible here. A failed run from a pull
+    # request is its author's: the red check is already on the PR, and this job
+    # would diagnose it against a checkout of main, where the change is not.
+    # Kept here rather than in the caller template so no repo needs re-enrolling.
+    if: inputs.job == 'monitor' && github.event.workflow_run.event != 'pull_request'
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 45
     concurrency:

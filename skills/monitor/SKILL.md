@@ -1,6 +1,6 @@
 ---
 name: monitor
-description: Headless only. Runs as /harness:monitor inside the factory's monitor job when an enrolled repo's workflow run fails; never invoke in an interactive session.
+description: Headless only. Runs as /harness:monitor inside the factory's monitor job when an enrolled repo's workflow run fails on its default branch, a schedule, or a dispatch (never a pull request); never invoke in an interactive session.
 disable-model-invocation: true
 ---
 

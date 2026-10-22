@@ -9,6 +9,10 @@ If the project has no `CLAUDE.md`, draft one (below). If it has one, update it:
 
 1. Assess what changed since the doc was last touched — from the tree, not from session memory: run `git log --oneline --since="$(git log -1 --format=%cI -- CLAUDE.md)"` (or use the file's mtime if CLAUDE.md is untracked), and for every count or name list the doc makes (directories, skills, agents, commands), `ls` the real thing and compare. Drift usually comes from sessions that never ran this skill, so the doc's own claims are the checklist.
 2. Apply the principles below and determine if updates are needed. Update the CLAUDE.md file as needed.
+   For each thing you'd add, ask whether every session needs it. If only
+   sessions working on that part of the system do, it belongs in that
+   part's doc (an existing one, or a new one under `docs/`), and CLAUDE.md
+   gets a pointer.
 3. Check whether those same changes invalidated overlapping prose in other top-level docs — primarily `README.md`, plus any `docs/`, `CONTRIBUTING.md`, or architecture notes. Update any that drifted so they stay consistent with CLAUDE.md. For a curated/human-owned doc where the right wording is unclear, flag the stale section instead of silently rewriting it.
 
 ## Core Principles
@@ -49,6 +53,7 @@ Structure the file around three questions:
 - Domain-specific instructions (put in separate docs, reference them)
 - Overly specific code snippets (they become outdated)
 - Rarely-needed procedures (e.g., database migrations, deployment steps—link to docs instead)
+- Detail that only matters to sessions working on one part of the system (how a particular feature, screen, or job behaves). It belongs in that part's doc, which CLAUDE.md points to.
 
 ## Drafting Process
 

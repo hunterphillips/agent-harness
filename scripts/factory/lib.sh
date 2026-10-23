@@ -166,9 +166,30 @@ run_seconds() {
   gh api "repos/$REPO/actions/runs/$1" --jq '((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))'
 }
 
+# dismiss_held_runs <sha>: a push with the workflow token starts no checks,
+# but GitHub can still record a pull-request run on the head and hold it for
+# a person's approval, which reads on the PR as a stall nobody in the job can
+# clear (personal-assistant #102, 2026-10-20). Cancel any such run on <sha>,
+# best effort; the caller's comment says the push started no checks either way.
+dismiss_held_runs() {
+  local sha=$1 id
+  sleep 20   # the held run appeared 13 s after the push on #102
+  for id in $(gh api "repos/$REPO/actions/runs?head_sha=$sha&per_page=50" \
+      --jq '.workflow_runs[] | select(.status == "action_required" or .conclusion == "action_required") | .id' 2> /dev/null); do
+    if gh api -X POST "repos/$REPO/actions/runs/$id/cancel" > /dev/null 2>&1 \
+       || gh api -X POST "repos/$REPO/actions/runs/$id/force-cancel" > /dev/null 2>&1; then
+      log "cancelled run $id, which GitHub held for approval after the workflow-token push"
+    else
+      log "run $id is held for approval after the workflow-token push and could not be cancelled"
+    fi
+  done
+}
+
 # Hand the issue to a human: one status label, one mention, nothing else.
+# HANDOFF_NOTE, when a script sets it, is one more sentence for the mention.
+HANDOFF_NOTE=""
 hand_off() { # hand_off <n> <reason> [pr]
   local n=$1 reason=$2 pr=${3:-}
   set_status "$n" ready-for-human
-  mention_owner "$n" "The implement run stopped: ${reason}. ${pr:+PR #$pr is a draft and was not merged. }A fresh \`ready-for-agent\` label resumes the branch. Run: ${RUN_URL:-}"
+  mention_owner "$n" "The implement run stopped: ${reason}. ${pr:+PR #$pr is a draft and was not merged. }${HANDOFF_NOTE:+$HANDOFF_NOTE }A fresh \`ready-for-agent\` label resumes the branch. Run: ${RUN_URL:-}"
 }

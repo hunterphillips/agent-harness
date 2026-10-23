@@ -71,6 +71,7 @@ if [ "$head" != "$remote_head" ]; then
   if git push -q "$(remote_with_token)" "HEAD:refs/heads/$BRANCH"; then
     log "pushed leftover commits"
     state_set TOKEN_PUSH "$head"   # only a push that landed can have started no CI
+    dismiss_held_runs "$head"
   fi
 fi
 [ -n "$pr" ] || verdict no_pr "the run reported done but opened no pull request"

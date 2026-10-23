@@ -24,7 +24,12 @@ fi
 if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ]; then
   remote_head=$(remote_head_of "$BRANCH")
   if [ "$(git rev-parse HEAD)" != "$remote_head" ]; then
-    git push -q "$(remote_with_token)" "HEAD:refs/heads/$BRANCH" && log "pushed leftover commits"
+    if git push -q "$(remote_with_token)" "HEAD:refs/heads/$BRANCH"; then
+      log "pushed leftover commits"
+      dismiss_held_runs "$(git rev-parse HEAD)"
+      # shellcheck disable=SC2034  # read by lib.sh hand_off
+      HANDOFF_NOTE="The run also pushed commits the attempt left unpushed, with the workflow token, which starts no checks; push a commit to run them."
+    fi
   fi
 fi
 

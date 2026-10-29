@@ -89,9 +89,20 @@ After all tests pass, look for [refactor candidates](refactoring.md):
 - [ ] Deepen modules (move complexity behind simple interfaces)
 - [ ] Apply SOLID principles where natural
 - [ ] Consider what new code reveals about existing code
-- [ ] Run tests after each refactor step
+- [ ] Run the tests for what you refactored after each step
 
 **Never refactor while RED.** Get to GREEN first.
+
+## How Much to Run
+
+Tests scale to the change. The full set proves a branch, not an edit.
+
+- After each change, run the test files that cover what changed, and say in one line which and why.
+- A fix round reruns only what it touched, plus anything the review or the failure named.
+- The full set runs once per branch, before the merge, by whoever merges; never by an implementer or a fix round. A full run that already passed is not rerun to re-verify a focused fix.
+- A project that ships a test selector (named in its CLAUDE.md, such as a `test:changed` script) is run through it instead of choosing files by hand.
+- Unsure of a change's reach? Widen to the suite for that layer, not to everything.
+- CI's full run on push is part of the net; count it when deciding whether a local full run adds anything.
 
 ## Checklist Per Cycle
 

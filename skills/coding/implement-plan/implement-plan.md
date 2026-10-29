@@ -39,7 +39,7 @@ If you encounter a mismatch:
 ## Verification Approach
 
 After implementing a phase:
-- Run the success criteria checks (usually `make check test` covers everything)
+- Run the phase's automated verification once, as the plan lists it. While working and when fixing, run the test files that cover the change (`../tdd/tdd.md`, How Much to Run); a full run that passed is not repeated to re-verify a focused fix, and the branch gets one full run before the merge
 - Fix any issues before proceeding
 - Update your progress in both the plan and your todos
 - Check off completed items in the plan file itself using Edit

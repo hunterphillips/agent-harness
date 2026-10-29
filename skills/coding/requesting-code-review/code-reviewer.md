@@ -61,7 +61,7 @@ Agent tool:
     - Tests verify real behavior, not mocks?
     - Edge cases covered?
     - Integration tests where they matter?
-    - All tests passing?
+    - All tests passing, per the implementer's report and CI? Run the touched test files yourself only when that is unclear, never the full set.
     - Tests well-scoped? Flag redundant, low-value, or brittle tests (e.g. asserting exact
       error strings, or enumerating trivial variations) — not just missing coverage.
     - Production code that exists only to satisfy a test?

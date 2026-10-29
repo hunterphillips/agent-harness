@@ -52,7 +52,7 @@ digraph process {
         "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [shape=box];
         "Code quality reviewer subagent approves?" [shape=diamond];
         "Dispatch fix subagent: quality issues" [shape=box];
-        "Run the suite (controller)" [shape=box];
+        "Run the suite for the layer the task touched (controller)" [shape=box];
         "Suite green?" [shape=diamond];
         "Dispatch fix subagent: suite failure" [shape=box];
         "Mark task complete (TaskUpdate)" [shape=box];
@@ -61,6 +61,7 @@ digraph process {
     "Read plan, extract all tasks with full text, note context, create task list (TaskCreate)" [shape=box];
     "More tasks remain?" [shape=diamond];
     "Dispatch final code reviewer subagent for entire implementation" [shape=box];
+    "Run the full set once (controller)" [shape=box];
     "Finish branch (/commit; describe-pr workflow if remote)" [shape=box style=filled fillcolor=lightgreen];
 
     "Read plan, extract all tasks with full text, note context, create task list (TaskCreate)" -> "Dispatch implementer subagent (./implementer-prompt.md)";
@@ -76,15 +77,16 @@ digraph process {
     "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" -> "Code quality reviewer subagent approves?";
     "Code quality reviewer subagent approves?" -> "Dispatch fix subagent: quality issues" [label="no"];
     "Dispatch fix subagent: quality issues" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="re-review"];
-    "Code quality reviewer subagent approves?" -> "Run the suite (controller)" [label="yes"];
-    "Run the suite (controller)" -> "Suite green?";
+    "Code quality reviewer subagent approves?" -> "Run the suite for the layer the task touched (controller)" [label="yes"];
+    "Run the suite for the layer the task touched (controller)" -> "Suite green?";
     "Suite green?" -> "Dispatch fix subagent: suite failure" [label="no"];
     "Dispatch fix subagent: suite failure" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="re-review"];
     "Suite green?" -> "Mark task complete (TaskUpdate)" [label="yes"];
     "Mark task complete (TaskUpdate)" -> "More tasks remain?";
     "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
     "More tasks remain?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
-    "Dispatch final code reviewer subagent for entire implementation" -> "Finish branch (/commit; describe-pr workflow if remote)";
+    "Dispatch final code reviewer subagent for entire implementation" -> "Run the full set once (controller)";
+    "Run the full set once (controller)" -> "Finish branch (/commit; describe-pr workflow if remote)";
 }
 ```
 
@@ -120,7 +122,7 @@ Mechanics of a concurrent wave:
 
 1. Every worktree starts from the plan branch's head, never from the default branch; earlier tasks' merged work is the base the wave builds on. `isolation: "worktree"` gives you that only when `worktree.baseRef` is `"head"` in settings; otherwise, or when the repo is not the session's cwd root, or when packages need a build step to resolve each other, create the worktrees by hand (`git worktree add`) and put the setup commands in each brief. Then dispatch every implementer of the wave in one message, each with a `model` chosen per task. Put the test-file rule in every brief. Before a wave of three or more on a laptop, check memory in use; a suite set costs a few GB on a heavy repo, and reviewers' runs count too.
 2. Run the spec and quality reviews per task, as usual, against that task's branch, as each implementer reports; don't wait for the whole wave. Fix subagents work in the same worktree. The reviews, not the implementers, are what fill your context in a wave: keep the review prompts self-contained and let the templates' short verdict format do its job.
-3. When a task passes both reviews, merge its branch into the plan branch and run the suite. Resolve conflicts yourself. A conflict means a `Files` list was incomplete; note it in the plan.
+3. When a task passes both reviews, merge its branch into the plan branch and run the suite for the layer the task touched (`../tdd/tdd.md`, How Much to Run); the full set runs once, before the branch merges. Resolve conflicts yourself. A conflict means a `Files` list was incomplete; note it in the plan.
 4. **Shared files are yours, not the implementers'**: `CLAUDE.md`, `CONTEXT.md`, `docs/adr/`, the plan file and its checkboxes, the task list. Implementers report what should change there; you apply `CONTEXT.md`, ADR, and plan updates after the merge, and collect the `CLAUDE.md` notes to run `write-claude-md` once after the phase rather than editing it per merge.
 5. Start the next wave after the merge, since its tasks may depend on what just landed.
 
@@ -144,7 +146,7 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 ## Fixing Review Issues
 
-When a reviewer (spec or quality) returns issues, **dispatch a fresh fix subagent** — do not assume you can resume the implementer. There is no reliable way to continue a previous agent's session, so re-feed the fix subagent what it needs: the original task text, what was built, the reviewer's specific findings, and the file paths / commit range. Then re-run the *same* reviewer on the result and repeat until it approves. (In this harness, re-review by continuing the same reviewer with `SendMessage` instead of dispatching a fresh one; it already holds the task and the first findings. Fall back to a fresh reviewer if the agent is gone.)
+When a reviewer (spec or quality) returns issues, **dispatch a fresh fix subagent** — do not assume you can resume the implementer. There is no reliable way to continue a previous agent's session, so re-feed the fix subagent what it needs: the original task text, what was built, the reviewer's specific findings, and the file paths / commit range. Then re-run the *same* reviewer on the result and repeat until it approves. (In this harness, re-review by continuing the same reviewer with `SendMessage` instead of dispatching a fresh one; it already holds the task and the first findings. Fall back to a fresh reviewer if the agent is gone.) A fix subagent reruns only the test files it touched plus what the reviewer named; the controller's run after the merge covers the rest.
 
 The two stages pull in opposite directions by design: the **spec** stage rewards YAGNI (build only what was asked); the **quality** stage rewards robustness (the edge cases and failures the requirements name, handled properly). Robustness is not more code: a quality reviewer flags defensive extras and speculative generality as readily as missing checks. When a quality reviewer proposes work beyond the spec, that tension is expected — apply it if it's cheap and clearly right, otherwise push back with reasoning (see `requesting-code-review`).
 

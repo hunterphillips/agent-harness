@@ -196,18 +196,18 @@ content; the note is his synthesis.
 
 ## Goals and priorities
 
-Hunter's goals live in the personal-assistant dashboard, not the vault. When
+Hunter's goals live in Suyo, not the vault. When
 he says in any session that a goal or priority changed (added, reworded,
 reprioritized, done, dropped), make the change for him in one pass, so he
 never manages it in two places:
 
-1. **The list: the dashboard.** `GET <hub>/api/goals` reads it;
+1. **The list: Suyo.** `GET <hub>/api/goals` reads it;
    `POST <hub>/api/goals/changes` with one JSON op changes it. `<hub>` is
    `https://hub.tail5b13b5.ts.net` from the Mac (Tailscale) and
    `http://127.0.0.1:4243` on hub. Every call carries `-H "Authorization:
-   Bearer $(cat ~/.config/personal-assistant/token)"`; the file holds the
+   Bearer $(cat ~/.config/suyo/token)"`; the file holds the
    token of a device paired on hub for this machine, and a machine without it
-   needs its own pairing (a code from `bin/dashboard-pair` on hub, posted to
+   needs its own pairing (a code from `app/bin/pair` on hub, posted to
    `/api/auth/pair` with `"transport": "bearer"`). Since 2026-10-21 the
    goals are one list ordered by hand, the first the most important (no
    sections). Ops: `add {title, why?, due?, links?}` (lands last), `edit
@@ -219,13 +219,13 @@ never manages it in two places:
 2. **The story: `notes/goals/<slug>.md`.** Context and reasons he gives go
    in that goal's note (update beats create), dated, in his words.
 3. **The copy: re-render now.** `notes/current-priorities.md` is generated
-   and never edited by hand. Run `DASHBOARD_TOKEN=$(cat
-   ~/.config/personal-assistant/token) GOALS_URL=<hub>/api/goals node
+   and never edited by hand. Run `SUYO_TOKEN=$(cat
+   ~/.config/suyo/token) GOALS_URL=<hub>/api/goals node
    bin/brain-goals-render.mjs` in the vault (it must print `goals=ok` or
    `goals=unchanged`), then commit and push with the story note.
 4. **Only on his word.** Change a goal only when Hunter says so; never on an
    agent's reading of what he seems to care about (vault rule 13). Never
-   ask a dashboard agent to make the change for you.
+   ask a Suyo agent to make the change for you.
 
 Announce what changed in each place in your reply.
 

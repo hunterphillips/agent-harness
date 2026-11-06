@@ -102,6 +102,7 @@ Tests scale to the change. The full set proves a branch, not an edit.
 - The full set runs once per branch, before the merge, by whoever merges; never by an implementer or a fix round. A full run that already passed is not rerun to re-verify a focused fix.
 - A project that ships a test selector (named in its CLAUDE.md, such as a `test:changed` script) is run through it instead of choosing files by hand.
 - Unsure of a change's reach? Widen to the suite for that layer, not to everything.
+- Main moved under you before the merge? Rebase, rerun the touched tests, and merge. A rebase does not restart the full set.
 - CI's full run on push is part of the net; count it when deciding whether a local full run adds anything.
 
 ## Checklist Per Cycle

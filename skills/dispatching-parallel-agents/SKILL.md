@@ -7,7 +7,7 @@ description: Use when facing 2+ independent tasks that can be worked on without 
 
 ## Overview
 
-Delegate independent tasks to subagents with isolated context. You construct exactly what each agent needs — they never inherit your session history — which keeps them focused and preserves your own context for coordination.
+Delegate independent tasks to subagents with isolated context. Start each one with a fresh context window, never a fork of this conversation, and construct exactly what it needs — which keeps them focused and preserves your own context for coordination.
 
 **Core principle:** One agent per independent problem domain. Dispatch them concurrently.
 

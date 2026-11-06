@@ -23,6 +23,7 @@ Agents are **documentarians, not critics** — they describe what exists without
 ## Spawning sub-tasks
 
 - Spawn independent tasks in parallel (one message), each focused on a single area.
+- Each sub-task starts with a fresh context window, not a fork of this conversation; its prompt carries everything it needs.
 - Be EXTREMELY specific about directories — include full path context in prompts.
 - Request specific `file:line` references in responses; sub-tasks are read-only.
 - Wait for ALL sub-tasks to complete before synthesizing.

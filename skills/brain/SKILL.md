@@ -203,7 +203,7 @@ never manages it in two places:
 
 1. **The list: Suyo.** `GET <hub>/api/goals` reads it;
    `POST <hub>/api/goals/changes` with one JSON op changes it. `<hub>` is
-   `https://hub.tail5b13b5.ts.net` from the Mac (Tailscale) and
+   `https://modest-seahorse.suyo.computer` from the Mac and
    `http://127.0.0.1:4243` on hub. Every call carries `-H "Authorization:
    Bearer $(cat ~/.config/suyo/token)"`; the file holds the
    token of a device paired on hub for this machine, and a machine without it

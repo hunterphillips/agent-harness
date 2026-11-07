@@ -69,6 +69,12 @@ part_parent() {
     | sed -n 's/.*<!-- factory-part-of: \([0-9]*\) -->.*/\1/p' | head -1
 }
 
+# The failure signature when <n> was opened by the monitor job, else empty.
+monitor_signature_of() {
+  gh issue view "$1" --repo "$REPO" --json body --jq .body \
+    | sed -n 's/.*<!-- monitor-signature: \(.*\) -->.*/\1/p' | head -1
+}
+
 pr_for_branch() { # open PR whose head is <branch>, or empty
   gh pr list --repo "$REPO" --head "$1" --state open --json number --jq '.[0].number // empty'
 }
@@ -100,18 +106,23 @@ ci_runs_on() {
 # pull-request workflow. GitHub writes a run within seconds of the push; check
 # runs come later, when a runner takes the job, which is why the gate never
 # counts those (a queued job read as "no CI ran" on scout #57, 2026-10-08).
-# Prints whatever runs exist once every expected path has one or the wait is
-# over: a workflow whose path or branch filter skipped this PR only costs the
-# wait.
+# Called directly, not in $(...): once every expected path has a run or the
+# wait is over, CI_RUNS holds whatever runs exist and CI_MISSING the expected
+# paths with none, space-separated. The gate merges only when CI_MISSING is
+# empty, so a workflow whose path or branch filter skips a PR blocks that PR's
+# merge (no enrolled repo's pull-request trigger has a filter, 2026-11-07).
+CI_RUNS=""
+CI_MISSING=""
+# shellcheck disable=SC2034  # CI_RUNS and CI_MISSING are read by gate.sh after sourcing
 wait_for_ci_runs() {
-  local sha=$1 waited=0 runs expected p missing
+  local sha=$1 waited=0 expected p
   expected=$(pr_workflow_paths)
   while :; do
-    runs=$(ci_runs_on "$sha")
-    missing=0
-    for p in $expected; do grep -q " $p " <<< "$runs" || missing=1; done
-    if { [ -n "$runs" ] && [ "$missing" -eq 0 ]; } || [ "$waited" -ge "${CI_RUN_WAIT:-120}" ]; then
-      printf '%s\n' "$runs"; return
+    CI_RUNS=$(ci_runs_on "$sha")
+    CI_MISSING=""
+    for p in $expected; do grep -q " $p " <<< "$CI_RUNS" || CI_MISSING+="${CI_MISSING:+ }$p"; done
+    if { [ -n "$CI_RUNS" ] && [ -z "$CI_MISSING" ]; } || [ "$waited" -ge "${CI_RUN_WAIT:-120}" ]; then
+      return
     fi
     sleep 10; waited=$((waited + 10))
   done

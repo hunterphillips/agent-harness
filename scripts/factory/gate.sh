@@ -9,8 +9,9 @@
 # to appear; GATE_MINUTES (default 30), the step's cap: the wait for CI,
 # queued or running, stops three minutes short of it, and the re-run is
 # skipped when it would not finish.
-# State written: GATE (clean|findings|checks_failed|no_ci|no_verdict|no_pr),
-# GATE_DETAIL, GATE_HEAD, HEALS, CI_RERUN (head whose failed jobs were re-run
+# State read: REVIEW_HEAD (review-prompt.sh). State written: GATE
+# (clean|findings|branch_moved|checks_failed|no_ci|no_verdict|no_pr),
+# GATE_DETAIL, GATE_HEAD (on clean, the reviewed commit), HEALS, CI_RERUN (head whose failed jobs were re-run
 # once), TOKEN_PUSH (head the gate pushed itself). Output: heal (true|false).
 # GATE is also checks_unfinished when a run outlasted the window, still
 # running or still queued behind other runs on the repo's checks runner.
@@ -99,8 +100,29 @@ fi
 allowed=$(state_get MERGE_ALLOWED)
 [ "$allowed" = true ] || verdict clean "the review is clean; auto-merge is not allowed, so PR #$pr awaits human review"
 
-if [ "$pr_checks" = true ]; then
+# The review, the checks, and the merge bind to one commit: the one
+# review-prompt.sh recorded. A push after the review (a heal agent that outlived
+# its step) moves the PR head; the new head gets a fresh review in a heal round,
+# or the issue goes to a person. GitHub can take a few seconds to show a push
+# on the PR, so a difference is read three times.
+reviewed=$(state_get REVIEW_HEAD)
+for _ in 1 2 3; do
   head_sha=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid)
+  [ "$head_sha" != "$reviewed" ] || break
+  sleep 10
+done
+if [ "$head_sha" != "$reviewed" ] || [ "$head" != "$reviewed" ]; then
+  heal branch_moved "the branch moved after the review: the review covered ${reviewed:0:7}, and the PR head is ${head_sha:0:7}" \
+    "## The branch moved after the review
+
+The merge gate reviewed ${reviewed:0:7}, but the pull request's head on GitHub
+is ${head_sha:0:7} and this checkout is at ${head:0:7}. Fetch the branch, read
+the commits the review did not cover, and leave the branch as it should merge:
+keep what belongs to this issue and revert what does not. Push, and leave
+\`.factory/done\` in place; the next review covers the new head."
+fi
+
+if [ "$pr_checks" = true ]; then
   if [ "$(state_get TOKEN_PUSH)" = "$head" ]; then
     heal no_ci "the last push came from the workflow token, which starts no CI" \
       "## No CI on ${head_sha:0:7}
@@ -110,7 +132,9 @@ GitHub starts no checks from that token. Make one empty commit
 (\`git commit --allow-empty -m \"Run CI\"\`) and push it so the checks run on
 this branch. Change nothing else; the review was clean."
   fi
-  runs=$(wait_for_ci_runs "$head_sha")
+  wait_for_ci_runs "$head_sha"
+  runs=$CI_RUNS
+  [ -z "$CI_MISSING" ] || verdict no_ci "no run of ${CI_MISSING// /, } on ${head_sha:0:7}"
   [ -n "$runs" ] || verdict no_ci "no CI ran on ${head_sha:0:7}"
   ids=$(cut -d' ' -f1 <<< "$runs")
   log "CI runs on ${head_sha:0:7}: $(tr '\n' ' ' <<< "$ids")"

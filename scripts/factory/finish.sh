@@ -81,9 +81,18 @@ if [ "$allowed" != true ]; then
   exit 0
 fi
 
+# Merge only the commit the review and the checks judged: GitHub refuses the
+# merge when the PR head has moved since.
+reviewed=$(state_get GATE_HEAD)
 gh pr ready "$pr" --repo "$REPO" > /dev/null
-if ! gh pr merge "$pr" --repo "$REPO" --squash --delete-branch > /dev/null; then
-  hand_off "$N" "the merge of PR #$pr was refused" "$pr"; exit 0
+if ! gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$reviewed" > /dev/null; then
+  now=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid 2> /dev/null || true)
+  if [ -n "$now" ] && [ "$now" != "$reviewed" ]; then
+    hand_off "$N" "the branch moved after the review (reviewed ${reviewed:0:7}, PR head ${now:0:7}), so the merge of PR #$pr was refused" "$pr"
+  else
+    hand_off "$N" "the merge of PR #$pr was refused" "$pr"
+  fi
+  exit 0
 fi
 set_status "$N" none
 sleep 5

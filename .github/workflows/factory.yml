@@ -3,6 +3,8 @@
 # The harness reaches the runner twice: as the `harness` plugin for the agent
 # (skills are /harness:<name>) and as a checkout at .harness for the mechanical
 # steps in scripts/factory/. Labels show state; dispatch starts work.
+# Models: triage runs the `model` input (Sonnet by default); callers pass Opus
+# for implement; the monitor and the merge-gate review run Opus, set here.
 #
 # anthropics/claude-code-action is pinned to a commit, not the floating v1 tag:
 # a v1 release once broke self-hosted runners (issue 1126). To bump it, resolve
@@ -18,10 +20,10 @@ on:
         type: string
         required: true
       model:
-        description: Model for this job (Sonnet for triage and monitor, Opus for implement)
+        description: Model for triage (default Sonnet) or implement (callers pass Opus). The monitor and the merge-gate review always run Opus.
         type: string
         required: false
-        default: claude-sonnet-5
+        default: claude-sonnet-5-5
       issue_number:
         description: Issue to triage or implement
         type: number
@@ -67,19 +69,21 @@ env:
 
 jobs:
   author:
-    # Only the owner's issues start work. A part of a split issue is judged
-    # by its parent's author. The job answers through `ok`; triage and
-    # implement need it and skip when it is false.
+    # Only the owner's issues and the monitor's start work. A part of a split
+    # issue is judged by its parent's author. The job answers through `ok`;
+    # triage and implement need it and skip when it is false. A dispatched run
+    # it refuses goes to the owner (author-gate.sh), hence issues: write.
     if: (inputs.job == 'triage' || inputs.job == 'implement') && github.actor != 'claude[bot]'
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 5
     permissions:
       contents: read
-      issues: read
+      issues: write
     outputs:
       ok: ${{ steps.gate.outputs.ok }}
     env:
       N: ${{ inputs.issue_number }}
+      EVENT: ${{ github.event_name }}
       REPO: ${{ github.repository }}
       OWNER: ${{ github.repository_owner }}
       GH_TOKEN: ${{ github.token }}
@@ -182,6 +186,8 @@ jobs:
     # the red check is already on their PR or branch, and this job would
     # diagnose it against a checkout of main, where the change is not. Kept
     # here rather than in the caller template so no repo needs re-enrolling.
+    # The monitor diagnoses and files the issue; when its gate passes, the
+    # fix is the implement job's, started by dispatch as triage starts it.
     if: >-
       inputs.job == 'monitor' &&
       github.event.workflow_run.event != 'pull_request' &&
@@ -193,13 +199,15 @@ jobs:
       group: factory-monitor-${{ github.repository }}-${{ inputs.workflow_name }}
       cancel-in-progress: false
     permissions:
-      contents: write
+      actions: write # read the failed run; start the implement run when the gate passes
+      contents: read
       issues: write
-      pull-requests: write
-      actions: read
-      checks: read
-      statuses: read
+      pull-requests: read
       id-token: write
+    env:
+      REPO: ${{ github.repository }}
+      OWNER: ${{ github.repository_owner }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Clean the runner
         if: runner.environment == 'self-hosted'
@@ -213,10 +221,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Git identity for pushes
-        run: |
-          git config user.name "claude[bot]"
-          git config user.email "41898282+claude[bot]@users.noreply.github.com"
+      - uses: actions/checkout@v4
+        with:
+          repository: hunterphillips/agent-harness
+          ref: main # callers pin factory.yml@main; keep the scripts on the same ref
+          path: .harness
+          persist-credentials: false
       - name: Fetch run metadata and failed job logs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -229,7 +239,8 @@ jobs:
           gh run view ${{ inputs.run_id }} --log-failed 2>/dev/null | tail -c 40000 > "$RUNNER_TEMP/failed-logs.txt"
           [ -s "$RUNNER_TEMP/failed-logs.txt" ] || echo "(no failed-job logs available)" > "$RUNNER_TEMP/failed-logs.txt"
           echo "run.json: $(wc -c < "$RUNNER_TEMP/run.json") bytes; logs: $(wc -l < "$RUNNER_TEMP/failed-logs.txt") lines"
-      - uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
+      - id: monitor
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1 as of 2026-10-12
         with:
           allowed_bots: claude[bot],github-actions # failures on main after a factory merge
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -246,11 +257,33 @@ jobs:
             Run metadata (JSON): ${{ runner.temp }}/run.json
             Failed job logs: ${{ runner.temp }}/failed-logs.txt
             Read both files first, then follow the monitor skill's steps exactly.
-            ${{ inputs.auto_merge && 'AUTO-MERGE ALLOWED for a fix PR that meets the skill''s merge step.' || 'AUTO-MERGE NOT ALLOWED: leave any fix PR as a draft.' }}
+
+            Hard limits: diagnosis only. Do not modify files, commit, push, open a pull
+            request, or change labels. When the gate passes on a new issue, the workflow
+            starts the implement run; you do not.
           claude_args: >-
-            --model ${{ inputs.model }} --max-turns 60 --max-budget-usd 5
+            --model claude-opus-5-5 --max-turns 60 --max-budget-usd 5
             --permission-mode dontAsk
-            --allowedTools Bash,Read,Glob,Grep,Skill,Agent,Edit,Write
+            --allowedTools Bash,Read,Glob,Grep,Skill,Agent
+            --disallowedTools 'Bash(git push:*)' 'Bash(gh pr create:*)' 'Bash(gh pr merge:*)' 'Bash(gh issue edit:*)'
+            --json-schema '{"type":"object","properties":{"issue":{"type":"integer"},"deduplicated":{"type":"boolean"},"fix":{"type":"boolean"},"reason":{"type":"string"}},"required":["issue","deduplicated","fix","reason"]}'
+      - name: Start the fix run when the gate passed
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERDICT: ${{ steps.monitor.outputs.structured_output }}
+        run: |
+          source .harness/scripts/factory/lib.sh
+          n=$(jq -r '.issue // 0' <<< "${VERDICT:-}" 2> /dev/null || echo 0)
+          fix=$(jq -r '.fix == true and .deduplicated != true' <<< "${VERDICT:-}" 2> /dev/null || echo false)
+          echo "monitor verdict: ${VERDICT:-none}"
+          [ "$fix" = true ] && [ "${n:-0}" -gt 0 ] || { echo "no fix run to start"; exit 0; }
+          has_label "$n" monitor || { echo "#$n is not a monitor issue; nothing to start"; exit 0; }
+          set_status "$n" ready-for-agent
+          .harness/scripts/factory/dispatch.sh "$n" || {
+            set_status "$n" ready-for-human
+            mention_owner "$n" "The monitor's gate passed, but the implement run did not start. Run: $RUN_URL"
+          }
 
   implement:
     needs: author

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fill the harness's code-reviewer template for an independent review of the
 # issue branch, written to .factory/review-prompt.md. The review step reads it.
-# Env: N REPO BRANCH HARNESS (path to the harness checkout).
+# Env: N REPO BRANCH HARNESS (path to the harness checkout). State written:
+# REVIEW_HEAD, the commit under review.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=lib.sh
@@ -10,6 +11,7 @@ source "$(dirname "$0")/lib.sh"
 template="${HARNESS:-.harness}/skills/coding/requesting-code-review/code-reviewer.md"
 base=$(state_get BASE)
 head=$(git rev-parse HEAD)
+state_set REVIEW_HEAD "$head"   # gate.sh judges checks on this commit and finish.sh merges only it
 pr=$(pr_for_branch "$BRANCH")
 description=$( [ -n "$pr" ] && gh pr view "$pr" --repo "$REPO" --json body --jq .body || echo "(no pull request body)")
 issue_text() { # issue_text <n>: title, body, and every comment as markdown

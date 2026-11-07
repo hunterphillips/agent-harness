@@ -277,7 +277,9 @@ jobs:
           n=$(jq -r '.issue // 0' <<< "${VERDICT:-}" 2> /dev/null || echo 0)
           fix=$(jq -r '.fix == true and .deduplicated != true' <<< "${VERDICT:-}" 2> /dev/null || echo false)
           echo "monitor verdict: ${VERDICT:-none}"
-          [ "$fix" = true ] && [ "${n:-0}" -gt 0 ] || { echo "no fix run to start"; exit 0; }
+          if [ "$fix" != true ] || ! [ "${n:-0}" -gt 0 ] 2> /dev/null; then
+            echo "no fix run to start"; exit 0
+          fi
           has_label "$n" monitor || { echo "#$n is not a monitor issue; nothing to start"; exit 0; }
           set_status "$n" ready-for-agent
           .harness/scripts/factory/dispatch.sh "$n" || {

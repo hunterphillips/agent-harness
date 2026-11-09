@@ -47,6 +47,7 @@ Extract from the user request:
 - **Target audience & context**: age group, usage context (commute, leisure, work)
 - **Style keywords**: playful, vibrant, minimal, dark mode, content-first, immersive, etc.
 - **Stack**: detect from the project — check `package.json` deps (react/next/vue/svelte/nuxt/@angular), `pubspec.yaml` (Flutter), `*.xcodeproj`/`Package.swift` (SwiftUI), `composer.json` (Laravel), or React Native markers (`app.json` + `react-native` dep). If nothing is detectable, ask the user or default to `html-tailwind`. **Never assume a stack** — a hardcoded default silently misroutes every recommendation.
+- **Reference sites the user names**: measure them instead of eyeballing screenshots. The `dembrandt` MCP reads a live URL's colors, type styles, spacing, radii, shadows, breakpoints, and motion values. It is project-scoped: add it when the design task starts with `claude mcp add dembrandt -- npx -y dembrandt@0.39.2 mcp`, and never pass `--key` (it uploads the run). Imagery, hierarchy, and grid still come from screenshots at desktop and phone width.
 
 ### Step 2: Generate design system (REQUIRED for new pages/projects)
 

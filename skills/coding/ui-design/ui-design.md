@@ -48,6 +48,16 @@ Extract from the user request:
 - **Style keywords**: playful, vibrant, minimal, dark mode, content-first, immersive, etc.
 - **Stack**: detect from the project — check `package.json` deps (react/next/vue/svelte/nuxt/@angular), `pubspec.yaml` (Flutter), `*.xcodeproj`/`Package.swift` (SwiftUI), `composer.json` (Laravel), or React Native markers (`app.json` + `react-native` dep). If nothing is detectable, ask the user or default to `html-tailwind`. **Never assume a stack** — a hardcoded default silently misroutes every recommendation.
 
+### Step 1b: Study reference sites (when the user names sites they admire)
+
+Measure a reference instead of judging it from screenshots:
+
+- **`dembrandt` MCP**: a live URL's colors by role, type styles, spacing, radii, shadows, components, breakpoints, and motion (durations, easing); `generate_design_md` writes it as a DESIGN.md. CLI: `npx -y dembrandt@<pinned> <url> --json-only`. Never pass `--key` (it uploads the run).
+- **`chrome-devtools` MCP**: per-element cascade (`get_css_styles`), performance traces for animation jank, reduced-motion and throttling emulation.
+- **Motion and feel**: scroll in steps and screenshot each, or record video and view extracted frames; read the transitions, keyframes, and GSAP/Framer Motion configs in the source. The user judges feel; the agent reports what moves, when, and with what values.
+
+Imagery style, hierarchy, and grid have no reliable extractor; read them from screenshots at desktop and phone width.
+
 ### Step 2: Generate design system (REQUIRED for new pages/projects)
 
 Always start with `--design-system` to get comprehensive recommendations with reasoning:

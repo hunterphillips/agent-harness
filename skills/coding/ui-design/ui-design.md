@@ -125,7 +125,7 @@ search.py "<keyword>" --stack <stack>
 
 ### Step 6: Build and check
 
-Implement to the direction. Before showing it, check the floors (contrast, focus, labels, targets, reduced motion), then look at the render at desktop and phone width and ask whether it could be any product in its category. If it could, go back to the defaults list and change the thing that makes it so.
+Implement to the direction. Before showing it, check the floors (contrast, focus, labels, targets, reduced motion), then look at the render at desktop and phone width and ask whether it could be any product in its category. If it could, go back to the defaults list and change the thing that makes it so. Make it specific through design, never through facts the brief did not supply: an invented count, feature, or policy reads as true, so it is an error, not character.
 
 ## If a search returns 0 results
 

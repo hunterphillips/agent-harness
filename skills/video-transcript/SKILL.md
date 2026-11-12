@@ -12,8 +12,10 @@ Fetch video metadata and clean caption text with `yt-dlp`, without downloading t
 ## Usage
 
 ```bash
-.claude/skills/video-transcript/fetch-transcript.py <url-or-video-id> [options]
+<skill-dir>/fetch-transcript.py <url-or-video-id> [options]
 ```
+
+`<skill-dir>` is the base directory shown when this skill loads (the skill is symlinked, so the path differs by machine).
 
 | Option | Meaning |
 |---|---|
@@ -26,16 +28,16 @@ Fetch video metadata and clean caption text with `yt-dlp`, without downloading t
 
 ```bash
 # Fetch metadata and an English transcript
-.claude/skills/video-transcript/fetch-transcript.py "https://www.youtube.com/watch?v=jNQXAC9IVRw"
+<skill-dir>/fetch-transcript.py "https://www.youtube.com/watch?v=jNQXAC9IVRw"
 
 # Include paragraph timestamps
-.claude/skills/video-transcript/fetch-transcript.py "https://youtu.be/jNQXAC9IVRw" --timestamps
+<skill-dir>/fetch-transcript.py "https://youtu.be/jNQXAC9IVRw" --timestamps
 
 # Request Spanish caption variants
-.claude/skills/video-transcript/fetch-transcript.py jNQXAC9IVRw --lang "es.*,es"
+<skill-dir>/fetch-transcript.py jNQXAC9IVRw --lang "es.*,es"
 
 # Use signed-in browser cookies for an age-restricted video
-.claude/skills/video-transcript/fetch-transcript.py "<url>" --cookies-from-browser chrome
+<skill-dir>/fetch-transcript.py "<url>" --cookies-from-browser chrome
 ```
 
 ## Output

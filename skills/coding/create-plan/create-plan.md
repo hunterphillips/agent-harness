@@ -7,7 +7,7 @@ Shared conventions: [research-conventions.md](./research-conventions.md) (file r
 ## Initial Response
 
 - **If a file path or ticket reference was provided**: read it FULLY immediately and begin Step 1.
-- **If no parameters**: ask for (1) the task/ticket description or file, (2) relevant context or constraints, (3) links to related research. Mention they can request the [create-plan workflow](create-plan.md) directly with a ticket path such as `thoughts/shared/tickets/eng_1234.md` (prefix with "think deeply about" for deeper analysis). Wait for input.
+- **If no parameters**: ask for (1) the task/ticket description or file, (2) relevant context or constraints, (3) links to related research. Mention they can request the [create-plan workflow](create-plan.md) directly with a ticket path or issue number. Wait for input.
 
 ## Step 1: Context Gathering & Initial Analysis
 

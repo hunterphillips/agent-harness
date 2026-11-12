@@ -13,8 +13,10 @@ Skip it for pure backend logic, API/database design, non-visual performance work
 Scripts live inside this workflow's folder. Resolve the path from the coding skill's base directory (announced when the skill loaded); in deployed projects that is:
 
 ```bash
-python3 .claude/skills/coding/ui-design/scripts/search.py "<query>" --domain <domain>
+python3 <coding-skill-dir>/ui-design/scripts/search.py "<query>" --domain <domain>
 ```
+
+`<coding-skill-dir>` is the base directory shown when the coding skill loads.
 
 All commands below abbreviate this as `search.py`. Requires Python 3.x, no external dependencies.
 

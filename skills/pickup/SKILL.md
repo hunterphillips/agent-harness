@@ -10,7 +10,7 @@ Pick up a lane — a durable thread of work whose state lives at `thoughts/share
 
 ## Step 1: Load Project Context
 
-Read `.claude/CLAUDE.md`; run `/onboard` first if this session has no project context yet.
+The project's `CLAUDE.md` is already loaded; run `/onboard` first if this session has no project context yet.
 
 ## Step 2: Resolve the Lane
 

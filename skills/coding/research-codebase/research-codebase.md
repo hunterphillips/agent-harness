@@ -12,7 +12,7 @@ If no research question was provided, ask for one and wait.
 
 1. **Read any directly mentioned files first** — fully, in the main context, before spawning sub-tasks.
 
-2. **Decompose the research question**: break it into composable research areas; think deeply about the underlying patterns, connections, and architectural implications the user might be seeking. Track sub-tasks with the task tools (TaskCreate/TaskUpdate).
+2. **Decompose the research question**: break it into composable research areas, covering the patterns, connections, and architectural implications the user is likely after. Track sub-tasks with the task tools (TaskCreate/TaskUpdate).
 
 3. **Spawn parallel sub-agents** per the conventions file: **codebase-locator** (WHERE), **codebase-analyzer** (HOW), **codebase-pattern-finder** (existing examples); **thoughts-locator/analyzer** for historical context; **web-search-researcher** only if explicitly requested. All agents are documentarians, not critics.
 

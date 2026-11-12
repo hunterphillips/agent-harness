@@ -121,7 +121,7 @@ Cite the behavior invariants (`B<n>`) from the design doc or PRD on the criteria
 
 ## References
 
-- Original ticket: `thoughts/shared/tickets/eng_XXXX.md`
+- Original ticket: `#42` or `thoughts/shared/tickets/<file>.md` (the tracker conventions in `../to-issues/tracker-conventions.md` set the layout)
 - Related research: `thoughts/shared/research/[relevant].md`
 - Similar implementation: `[file:line]`
 ````

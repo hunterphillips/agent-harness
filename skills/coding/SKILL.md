@@ -43,7 +43,7 @@ Match process weight to stakes: the delivery workflows exist for software that p
 | Deepening refactors, module interfaces, consolidating coupled modules                                                   | [architecture-improvement/architecture-improvement.md](architecture-improvement/architecture-improvement.md)                                                                                                                                     |
 | PR being opened/updated — write the description                                                                         | [describe-pr/describe-pr.md](describe-pr/describe-pr.md)                                                                                                                                                                                         |
 
-† High-reasoning workflow (formerly `model: opus`): prefer the most capable available model/effort for this work.
+† High-reasoning workflow: use the most capable available model and effort for this work.
 
 ## Support files (loaded on demand by the workflows above)
 

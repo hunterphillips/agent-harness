@@ -1,6 +1,6 @@
 # Humanizer: remove AI writing patterns
 
-Editor pass on text that already exists. The always-on version of the same rules is the **Human Writer** output style (`output-styles/human-writer.md`); the positive model, what good prose does, is [craft.md](craft.md). Load this file for a rewrite or an audit.
+Editor pass on text that already exists. The **Human Writer** output style (`output-styles/human-writer.md`) is the short always-on default for replies; this file holds the full rules for deliberate work. The positive model, what good prose does, is [craft.md](craft.md). Load this file for a rewrite or an audit.
 
 **Structure beats vocabulary.** The durable AI tells are structural: copula avoidance, participial tack-ons, rule of three, significance inflation, negative parallelism, false agency, manufactured punchiness, metacommentary. Word lists ("delve," "tapestry") date with each model generation, so treat them as illustrative. A draft with every banned word removed still reads as AI if the sentence skeletons are untouched. Fix the structure first.
 

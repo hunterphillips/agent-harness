@@ -1,6 +1,8 @@
 # Quick Reference — Full Rule Set (all 10 categories)
 
-Load this file when doing a UI review/audit pass, or when you need the full checklist for a category beyond the priority table in SKILL.md. Each rule is also present verbatim in `data/ux-guidelines.csv` / `data/app-interface.csv` and is reachable via `--domain ux` / `--domain web` search — this file is a static index for quick scanning without a search round-trip.
+Load this file when doing a UI review/audit pass, or when you need the full checklist for a category. Each rule is also present verbatim in `data/ux-guidelines.csv` / `data/app-interface.csv` and is reachable via `--domain ux` / `--domain web` search — this file is a static index for quick scanning without a search round-trip.
+
+Rules in §1 (accessibility) and §2 (touch) are floors: they hold for any design. The numbers elsewhere (durations, element counts, stagger timings, sizes) are defaults, right when nothing argues otherwise; the design direction may override one, with the reason stated (see "Floors and defaults" in `ui-design.md`).
 
 ## Quick Reference
 

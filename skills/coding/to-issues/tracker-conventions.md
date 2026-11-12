@@ -53,6 +53,8 @@ One status label per issue. Triage (the [triage workflow](../triage/triage.md), 
 - `in-progress` — added by whoever claims the issue (a cloud run or a local `pickup`); removed when the PR opens or the work is dropped
 - `monitor` — opened by the monitor job for a failed workflow run; one issue per failure signature, later occurrences append as comments
 
+An issue the user approved in an interactive session (`to-prd`, `to-issues`) may be published as `ready-for-agent` without the triage job: the user's review of the written issue is a stricter check than the seven-check gate, which exists for issues nobody has read. An issue written by an unattended run gets no such exemption; it is published `needs-triage` (the monitor job's issues carry their own gate).
+
 Two rules keep the labels honest. Setting a status label always removes the others (the factory's steps do this through `scripts/factory/lib.sh set_status`; a prompt or a session does it with one `gh issue edit --add-label x --remove-label <the rest>`). And labels show state; they do not start work: the factory's own label changes fire no workflows, so the triage job and the parts chain start the implement run by `workflow_dispatch`, and a `ready-for-agent` label set by hand is the only label event that starts anything.
 
 ## Cloud contract

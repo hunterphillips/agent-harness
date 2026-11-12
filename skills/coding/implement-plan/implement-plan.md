@@ -24,9 +24,7 @@ Plans are carefully designed, but reality can be messy. Your job is to:
 
 When things don't match the plan exactly, think about why and communicate clearly. The plan is your guide, but your judgment matters too.
 
-If you encounter a mismatch:
-- STOP and think deeply about why the plan can't be followed
-- Present the issue clearly:
+If the plan can't be followed as written, work out why. A routine deviation (a renamed helper, a file the plan missed) you make and record in the plan's progress notes. One that changes scope or design you present and wait on (the confirmation rule in `../SKILL.md`):
   ```
   Issue in Phase [N]:
   Expected: [what the plan says]
@@ -57,7 +55,7 @@ After implementing a phase:
   Let me know when manual testing is complete so I can proceed to Phase [N+1].
   ```
 
-If instructed to execute multiple phases consecutively, skip the pause until the last phase. Otherwise, assume you are just doing one phase.
+If instructed to execute multiple phases consecutively, skip the pause until the last phase and list each phase's manual checks as pending. Otherwise, assume you are just doing one phase.
 
 do not check off items in the manual testing steps until confirmed by the user.
 

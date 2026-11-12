@@ -41,7 +41,7 @@ RIGHT (vertical):
 
 When exploring the codebase, use the project's domain glossary so that test names and interface vocabulary match the project's language, and respect ADRs in the area you're touching.
 
-Before writing any code:
+Before writing any code (in an interactive session; an unattended run or a plan execution takes the interface and the behaviors from the issue or plan and records its choices in the report):
 
 - [ ] Confirm with user what interface changes are needed
 - [ ] Confirm with user which behaviors to test (prioritize)

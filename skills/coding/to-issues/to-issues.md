@@ -41,7 +41,7 @@ Iterate until the user approves.
 
 ### 5. Publish to the issue tracker
 
-For each approved slice, publish an issue per the tracker conventions, using the template below. Mark AFK slices `ready-for-agent` and HITL slices `ready-for-human` (noting why), unless instructed otherwise.
+For each approved slice, publish an issue per the tracker conventions, using the template below. Mark AFK slices `ready-for-agent` and HITL slices `ready-for-human` (noting why), unless instructed otherwise. The user's approval of the slices above is the triage; `ready-for-agent` starts an unattended run, so publish only what they approved.
 
 Publish in dependency order (blockers first) so "Blocked by" can reference real issue identifiers (`#42` or the issue file path).
 

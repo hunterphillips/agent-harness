@@ -15,6 +15,10 @@ Router for all software-delivery work. Pick the workflow, load it, follow it.
 
 If a workflow applies, this is not optional — do not "just do the task" from general knowledge. If the state changes mid-task (a bug surfaces during implementation, a plan turns out wrong), return here and re-route. When multiple rows apply, process comes first: design → plan → implement → review. If genuinely no row applies, say so in one line and proceed normally.
 
+## Confirmation rule
+
+One rule for every workflow below; where a workflow's wording differs, this wins. In an interactive session, confirm decisions that change scope or design; make routine calls yourself and say what you decided. When told to execute a plan, or in an unattended run (a factory job, `implement-issue`), do not stop to confirm: make the call the spec supports, record it in the report, and list the plan's manual checks as pending. In both modes, stop for destructive actions (data loss, force pushes, anything outside the branch) and for decisions the spec does not settle. Workflows whose method is a dialogue (`brainstorming`, `grill-me`, `create-plan`, `iterate-plan`) are interactive by design; their check-ins are the work, not pauses to skip.
+
 Match process weight to stakes: the delivery workflows exist for software that people depend on. Code whose whole audience is its author — one-off scripts or tooling — consider the scratch row. Judge by the code's lifespan and audience, not by which project directory you happen to be in (a research paper repo can contain a real maintained tool; an app repo can contain scratch).
 
 ## Routing table

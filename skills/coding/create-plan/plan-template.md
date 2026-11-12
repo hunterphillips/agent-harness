@@ -80,7 +80,7 @@ Examples: `2025-01-08-ENG-1478-parent-child-tracking.md`, `2025-01-08-improve-er
 
 Cite the behavior invariants (`B<n>`) from the design doc or PRD on the criteria that prove them; every invariant the plan touches should appear on at least one criterion. Plans for trivial fixes have no invariants to cite.
 
-**Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human that the manual testing was successful before proceeding to the next phase.
+**Implementation Note**: After the automated verification passes, hand the manual checks to the human before starting the next phase. An executor told to run the plan through, or running unattended, lists them as pending instead (confirmation rule in `coding/SKILL.md`).
 
 ---
 

@@ -4,7 +4,7 @@
 
 Help turn ideas into fully formed designs and specs through natural collaborative dialogue.
 
-Start by understanding the current project context, then ask questions one at a time to refine the idea. Once you understand what you're building, present the design in small sections (200-300 words), checking after each section whether it looks right so far.
+Start by understanding the current project context, then ask questions one at a time to refine the idea. Once you understand what you're building, present the design one section at a time, checking after each whether it looks right so far.
 
 ## The Process
 
@@ -18,14 +18,14 @@ Start by understanding the current project context, then ask questions one at a 
 
 **Exploring approaches:**
 
-- Propose 2-3 different approaches with trade-offs
+- Propose the different approaches that are real options, with trade-offs (usually two or three; don't pad to a count)
 - Present options conversationally with your recommendation and reasoning
 - Lead with your recommended option and explain why
 
 **Presenting the design:**
 
 - Once you believe you understand what you're building, present the design
-- Break it into sections of 200-300 words
+- Break it into sections a reader can judge in one go, one concern each
 - Ask after each section whether it looks right so far
 - Cover: architecture, components, data flow, error handling, testing
 - End with **Behavior**: a numbered list (`B1`, `B2`, …) of user-observable invariants the design commits to, each testable and free of implementation detail: the empty, error, and loading states; the edge cases that were discussed; what must not regress. Plans, issues, and validation cite these numbers. A trivial fix gets none (same bar as the router's scratch row).
@@ -46,6 +46,6 @@ Start by understanding the current project context, then ask questions one at a 
 - **One question at a time** - Don't overwhelm with multiple questions
 - **Multiple choice preferred** - Easier to answer than open-ended when possible
 - **YAGNI ruthlessly** - Remove unnecessary features from all designs
-- **Explore alternatives** - Always propose 2-3 approaches before settling
+- **Explore alternatives** - Propose the real options before settling
 - **Incremental validation** - Present design in sections, validate each
 - **Be flexible** - Go back and clarify when something doesn't make sense

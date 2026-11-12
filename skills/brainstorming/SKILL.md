@@ -18,12 +18,12 @@ Help turn a fuzzy idea into a fully formed plan, design, or decision through nat
 
 **Exploring approaches:**
 
-- Propose 2–3 genuinely different approaches with trade-offs
+- Propose the genuinely different approaches with trade-offs (usually two or three; don't pad to a count)
 - Lead with your recommendation and the reasoning; a recommendation, not a menu
 
 **Presenting the result:**
 
-- Present the plan in sections of 200–300 words, checking after each whether it looks right so far
+- Present the plan one section at a time, one concern each, checking after each whether it looks right so far
 - Cover the dimensions that matter for the domain — for an event: logistics, budget, sequence; for a research direction: question, method, evidence needed; for a decision: options, criteria, downsides
 - Go back and clarify whenever something doesn't hold up
 
@@ -36,6 +36,6 @@ Help turn a fuzzy idea into a fully formed plan, design, or decision through nat
 
 - **One question at a time** — never a questionnaire
 - **YAGNI ruthlessly** — strip what the idea doesn't need
-- **Explore alternatives before settling** — 2–3 approaches minimum
+- **Explore alternatives before settling** — the real options, not a padded list
 - **Incremental validation** — never dump a finished plan in one block
 - **Be flexible** — revisit earlier answers when later ones contradict them

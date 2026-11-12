@@ -1,6 +1,6 @@
 # To PRD
 
-Take the current conversation context and codebase understanding and produce a PRD. Do NOT interview the user — just synthesize what you already know.
+Take the current conversation context and codebase understanding and produce a PRD. Synthesize what you already know rather than interviewing the user; the one check is on the test seams in step 2.
 
 Tracker resolution and publishing mechanics: [tracker-conventions.md](../to-issues/tracker-conventions.md).
 
@@ -12,7 +12,7 @@ Tracker resolution and publishing mechanics: [tracker-conventions.md](../to-issu
 
    Check with the user that these seams match their expectations.
 
-3. **Write the PRD** using the template below, then publish it per the tracker conventions (GitHub: an issue labeled `ready-for-agent`; local: `thoughts/shared/tickets/<feature-slug>/PRD.md` with `Status: ready-for-agent`). No additional triage needed.
+3. **Write the PRD** using the template below, then publish it per the tracker conventions (GitHub: an issue labeled `ready-for-agent`; local: `thoughts/shared/tickets/<feature-slug>/PRD.md` with `Status: ready-for-agent`). The user's approval in this session is the triage (see the conventions); the label starts an unattended run, so publish only what they approved.
 
 <prd-template>
 

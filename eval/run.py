@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import copy
 import dataclasses
 import datetime as dt
 import json
@@ -153,12 +154,14 @@ def discover_tasks(battery: str) -> list[Task]:
                 )
             )
     else:
-        for task_dir in sorted(path for path in (EVAL_DIR / "tasks" / "coding").iterdir() if path.is_dir()):
+        for task_dir in sorted(path for path in (EVAL_DIR / "tasks" / battery).iterdir() if path.is_dir()):
+            if task_dir.name == "__pycache__":
+                continue
             task_path = task_dir / "task.md"
             check_script = task_dir / "checks.py"
             fixture_repo = task_dir / "repo"
             if not (task_path.is_file() and check_script.is_file() and fixture_repo.is_dir()):
-                raise ValueError(f"incomplete coding fixture: {task_dir}")
+                raise ValueError(f"incomplete {battery} fixture: {task_dir}")
             fields, body = parse_frontmatter(task_path.read_text(encoding="utf-8"), task_path)
             prompt = re.sub(r"\A## Task Prompt\s*", "", body).strip()
             tasks.append(
@@ -304,7 +307,7 @@ def changed_paths(workspace: Path) -> list[str]:
     return sorted(paths)
 
 
-def collect_code_artifact(workspace: Path, gate: dict[str, Any]) -> str:
+def collect_code_artifact(workspace: Path, gate: dict[str, Any], *, ui: bool = False) -> str:
     patch = git(workspace, "diff", "--no-ext-diff", "--no-color", "HEAD", "--", ".")
     files = set(git(workspace, "ls-files").splitlines())
     files.update(changed_paths(workspace))
@@ -324,7 +327,8 @@ def collect_code_artifact(workspace: Path, gate: dict[str, Any]) -> str:
         "DETERMINISTIC CHECK\n"
         f"passed: {str(gate['passed']).lower()}\n"
         f"details:\n{gate['details'].strip()}\n\n"
-        f"PATCH\n{patch.strip() or '(no patch)'}\n\n"
+        + ("SCREENSHOTS\nDesktop (1280x800) and phone (390x844), full page, attached separately.\n\n" if ui else "")
+        + f"PATCH\n{patch.strip() or '(no patch)'}\n\n"
         "CURRENT FILE CONTENTS\n"
         + "\n\n".join(sections)
     )
@@ -347,7 +351,19 @@ def run_gate(task: Task, workspace: Path) -> dict[str, Any]:
     }
 
 
-def run_arm(task: Task, replicate: int, arm: str) -> dict[str, Any]:
+def render_ui(workspace: Path, result_dir: Path) -> dict[str, str]:
+    result_dir.mkdir(parents=True, exist_ok=True)
+    completed, _ = run_command(
+        ["node", str(EVAL_DIR / "tasks" / "ui" / "browser.cjs"), "render", str(workspace), str(result_dir)],
+        cwd=EVAL_DIR,
+        timeout=120,
+    )
+    if completed.returncode:
+        raise RuntimeError(f"UI render failed: {completed.stdout}{completed.stderr}")
+    return {size: str((result_dir / f"{size}.png").resolve()) for size in ("desktop", "phone")}
+
+
+def run_arm(task: Task, replicate: int, arm: str, result_dir: Path) -> dict[str, Any]:
     key = f"arm:{task.id}:{replicate}:{arm}"
     with tempfile.TemporaryDirectory(prefix="eval-candidate-") as temp:
         workspace = Path(temp)
@@ -396,9 +412,15 @@ def run_arm(task: Task, replicate: int, arm: str) -> dict[str, Any]:
             envelope = {}
 
         gate: dict[str, Any] | None = None
-        if task.battery == "coding":
+        screenshots: dict[str, str] = {}
+        if task.battery in ("coding", "ui"):
             gate = run_gate(task, workspace)
-            artifact = collect_code_artifact(workspace, gate)
+            if task.battery == "ui":
+                # A render failure raises and aborts the run before the arm is
+                # journaled, so --resume reruns the arm instead of keeping an
+                # unjudgeable record.
+                screenshots = render_ui(workspace, result_dir)
+            artifact = collect_code_artifact(workspace, gate, ui=bool(screenshots))
         else:
             artifact = str(envelope.get("result", "")).strip()
 
@@ -426,6 +448,7 @@ def run_arm(task: Task, replicate: int, arm: str) -> dict[str, Any]:
                 "model_usage": envelope.get("modelUsage"),
             },
             "gate": gate,
+            "screenshots": screenshots,
             "stderr_tail": completed.stderr[-2000:],
             "captured_at": dt.datetime.now(dt.UTC).isoformat(),
         }
@@ -518,6 +541,14 @@ CODING_SCHEMA = {
     "required": ["criteria", "overall"],
 }
 
+UI_DIMENSIONS = ("fit", "hierarchy", "distinctiveness", "responsive", "code")
+UI_SCHEMA = copy.deepcopy(CODING_SCHEMA)
+UI_SCHEMA["properties"]["criteria"]["properties"] = {
+    name: copy.deepcopy(CODING_SCHEMA["properties"]["criteria"]["properties"]["simplicity"])
+    for name in UI_DIMENSIONS
+}
+UI_SCHEMA["properties"]["criteria"]["required"] = list(UI_DIMENSIONS)
+
 
 def judge_prompt(task: Task, response_a: str, response_b: str) -> str:
     rubric_path = EVAL_DIR / "judge" / f"{task.battery}-rubric.md"
@@ -573,12 +604,31 @@ def run_judge(
 ) -> dict[str, Any]:
     key = f"judge:{task.id}:{replicate}:{order_index}"
     prompt = judge_prompt(task, first_result["result"], second_result["result"])
-    schema = WRITING_SCHEMA if task.battery == "writing" else CODING_SCHEMA
+    schema = {"writing": WRITING_SCHEMA, "coding": CODING_SCHEMA, "ui": UI_SCHEMA}[task.battery]
+    images: list[str] = []
+    if task.battery == "ui":
+        for result in (first_result, second_result):
+            for size in ("desktop", "phone"):
+                path = result.get("screenshots", {}).get(size)
+                if not path or not Path(path).is_file():
+                    raise ValueError("UI judging requires desktop and phone screenshots for both artifacts")
+                images.append(path)
+        prompt += (
+            "\n\nAttached images in order: image 1 = A desktop (1280x800); "
+            "image 2 = A phone (390x844); image 3 = B desktop (1280x800); "
+            "image 4 = B phone (390x844). All are full-page screenshots."
+        )
     with tempfile.TemporaryDirectory(prefix="eval-review-") as temp:
         workspace = Path(temp)
         schema_path = workspace / "response-schema.json"
         message_path = workspace / "verdict.json"
         schema_path.write_text(json.dumps(schema), encoding="utf-8")
+        # Keep arm names out of attachment filenames as well as the prompt.
+        attachments: list[Path] = []
+        for source, name in zip(images, ("A-desktop", "A-phone", "B-desktop", "B-phone")):
+            target = workspace / f"{name}.png"
+            shutil.copyfile(source, target)
+            attachments.append(target)
         args = [
             "codex",
             "exec",
@@ -599,8 +649,12 @@ def run_judge(
             str(schema_path),
             "--output-last-message",
             str(message_path),
-            "-",
         ]
+        # The prompt positional goes before the image flags: `-i` is variadic
+        # and would swallow a trailing `-` as a fifth image path.
+        args.append("-")
+        for path in attachments:
+            args.extend(["-i", str(path)])
         completed, wall_duration_ms = run_command(args, cwd=workspace, input_text=prompt)
         usage, event_message = parse_codex_events(completed.stdout)
         raw_message = message_path.read_text(encoding="utf-8") if message_path.exists() else event_message
@@ -651,6 +705,8 @@ def agreed_winner(first: str, second: str) -> str:
 def dimensions_for(battery: str) -> list[str]:
     if battery == "writing":
         return ["naturalness", "answer_first", "calibration", "clarity_concision", "faithfulness"]
+    if battery == "ui":
+        return list(UI_DIMENSIONS)
     return ["correctness_scope", "simplicity", "style_consistency", "test_quality"]
 
 
@@ -904,7 +960,7 @@ def metadata_for(run_id: str, battery: str, tasks: list[Task], replicates: int) 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--battery", required=True, choices=("writing", "coding"))
+    parser.add_argument("--battery", required=True, choices=("writing", "coding", "ui"))
     parser.add_argument("--task", help="run one task id")
     parser.add_argument("--dry-run", action="store_true", help="show planned work without invoking a model")
     parser.add_argument("--replicates", type=int, default=3)
@@ -932,6 +988,8 @@ def main(argv: list[str] | None = None) -> int:
     for executable in ("claude", "codex", "git"):
         if shutil.which(executable) is None:
             parser.error(f"required executable not found: {executable}")
+    if args.battery == "ui" and shutil.which("node") is None:
+        parser.error("required executable not found: node (see eval/README.md for UI setup)")
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     run_id = args.resume or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -977,7 +1035,8 @@ def main(argv: list[str] | None = None) -> int:
                     if existing:
                         arm_records[arm] = existing
                     else:
-                        pending[executor.submit(run_arm, task, replicate, arm)] = arm
+                        result_dir = RESULTS_DIR / run_id / task.id / str(replicate) / arm
+                        pending[executor.submit(run_arm, task, replicate, arm, result_dir)] = arm
                 for future in concurrent.futures.as_completed(pending):
                     arm = pending[future]
                     record = future.result()

@@ -21,5 +21,6 @@ thoughts/
 # Python bytecode (ui-design scripts)
 __pycache__/
 eval/results/
+eval/node_modules/
 agents/profile-resolver.md
 skills/commit/

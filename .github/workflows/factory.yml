@@ -234,9 +234,24 @@ jobs:
           set +e
           gh run view ${{ inputs.run_id }} \
             --json name,conclusion,headBranch,headSha,url,event,jobs \
-            --jq '{name,conclusion,headBranch,headSha,url,event,failedJobs:[.jobs[]|select(.conclusion=="failure")|{name,url,steps:[.steps[]|select(.conclusion=="failure")|.name]}]}' \
+            --jq '{name,conclusion,headBranch,headSha,url,event,failedJobs:[.jobs[]|select(.conclusion=="failure")|{name,url,id:.databaseId,steps:[.steps[]|select(.conclusion=="failure")|.name]}]}' \
             > "$RUNNER_TEMP/run.json" || echo '{}' > "$RUNNER_TEMP/run.json"
-          gh run view ${{ inputs.run_id }} --log-failed 2>/dev/null | tail -c 40000 > "$RUNNER_TEMP/failed-logs.txt"
+          # Each failed job gets its own tail of the 40 KB budget (8 KB minimum), so one
+          # noisy job cannot push another's failure out of the window.
+          : > "$RUNNER_TEMP/failed-logs.txt"
+          job_ids=$(jq -r '.failedJobs[]?.id' "$RUNNER_TEMP/run.json")
+          job_count=$(echo "$job_ids" | grep -c .)
+          budget=$((40000 / (job_count > 0 ? job_count : 1)))
+          [ "$budget" -ge 8000 ] || budget=8000
+          for id in $job_ids; do
+            name=$(jq -r --argjson id "$id" '.failedJobs[]|select(.id==$id)|.name' "$RUNNER_TEMP/run.json")
+            gh run view --job "$id" --log-failed 2>/dev/null > "$RUNNER_TEMP/job-log.txt"
+            # Drop the post-job cleanup that follows the failing step's exit line.
+            last=$(grep -n '##\[error\]Process completed with exit code' "$RUNNER_TEMP/job-log.txt" | tail -1 | cut -d: -f1)
+            [ -n "$last" ] && { head -n "$last" "$RUNNER_TEMP/job-log.txt" > "$RUNNER_TEMP/job-log.cut"; mv "$RUNNER_TEMP/job-log.cut" "$RUNNER_TEMP/job-log.txt"; }
+            [ -s "$RUNNER_TEMP/job-log.txt" ] || echo "(no log available for this job)" > "$RUNNER_TEMP/job-log.txt"
+            { echo "=== $name ==="; tail -c "$budget" "$RUNNER_TEMP/job-log.txt"; echo; } >> "$RUNNER_TEMP/failed-logs.txt"
+          done
           [ -s "$RUNNER_TEMP/failed-logs.txt" ] || echo "(no failed-job logs available)" > "$RUNNER_TEMP/failed-logs.txt"
           echo "run.json: $(wc -c < "$RUNNER_TEMP/run.json") bytes; logs: $(wc -l < "$RUNNER_TEMP/failed-logs.txt") lines"
       - id: monitor

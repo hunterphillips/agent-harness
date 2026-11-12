@@ -22,21 +22,12 @@ Agent tool:
 
     [From implementer's report]
 
-    ## CRITICAL: Do Not Trust the Report
+    ## Verify against the code
 
-    Do not assume the implementer's report is complete or accurate — it may be optimistic,
-    incomplete, or wrong. You MUST verify everything independently.
+    The report may be incomplete or optimistic; verify every claim against the code.
 
-    **DO NOT:**
-    - Take their word for what they implemented
-    - Trust their claims about completeness
-    - Accept their interpretation of requirements
-
-    **DO:**
-    - Read the actual code they wrote
-    - Compare actual implementation to requirements line by line
-    - Check for missing pieces they claimed to implement
-    - Look for extra features they didn't mention
+    Read the code, compare it to the requirements line by line, check for pieces the
+    report claims that are missing, and look for extras the report does not mention.
 
     ## Your Job
 

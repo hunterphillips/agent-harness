@@ -4,7 +4,7 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 **Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. Start each one with a fresh context window; it never inherits your session's context or history — you construct exactly what it needs. (A runtime that forks the conversation by default, such as Codex, is told to start fresh.) This also preserves your own context for coordination work.
 
-**Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
+**Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration. The review scales with the task (see "Fixing Review Issues"): a mechanical task gets one combined pass, and a trivial fix is yours to apply.
 
 **Continuous execution:** Do not pause to check in with your human partner between tasks. Execute all tasks from the plan without stopping. The only reasons to stop are: BLOCKED status you cannot resolve, ambiguity that genuinely prevents progress, or all tasks complete. "Should I continue?" prompts and progress summaries waste their time — they asked you to execute the plan, so execute it.
 
@@ -148,6 +148,11 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 When a reviewer (spec or quality) returns issues, **dispatch a fresh fix subagent** — do not assume you can resume the implementer. There is no reliable way to continue a previous agent's session, so re-feed the fix subagent what it needs: the original task text, what was built, the reviewer's specific findings, and the file paths / commit range. Then re-run the *same* reviewer on the result and repeat until it approves. (In this harness, re-review by continuing the same reviewer with `SendMessage` instead of dispatching a fresh one; it already holds the task and the first findings. Fall back to a fresh reviewer if the agent is gone.) A fix subagent reruns only the test files it touched plus what the reviewer named; the controller's run after the merge covers the rest.
 
+**Scale the review to the task.** The two stages exist because a reviewer who checks the spec and one who checks the code find different things, and that holds for any task with judgment in it. Two cases are cheaper without losing that:
+
+- A **mechanical task** (the cheap-model tier above: one or two files, a complete spec) gets one reviewer: dispatch the code-quality reviewer with the task text included and ask it to verify spec compliance first, then quality, in one pass. Its verdict covers both stages.
+- A **trivial, unambiguous fix** from a finding (a typo, a missed import, a renamed identifier, a one-line condition the reviewer spelled out) you apply yourself and note in the task list, then re-review. A fix subagent is for anything that takes judgment or more than a few lines; the reason is that your context fills with the work's detail, not that you may not touch the code.
+
 The two stages pull in opposite directions by design: the **spec** stage rewards YAGNI (build only what was asked); the **quality** stage rewards robustness (the edge cases and failures the requirements name, handled properly). Robustness is not more code: a quality reviewer flags defensive extras and speculative generality as readily as missing checks. When a quality reviewer proposes work beyond the spec, that tension is expected — apply it if it's cheap and clearly right, otherwise push back with reasoning (see `requesting-code-review`).
 
 ## Prompt Templates
@@ -156,144 +161,13 @@ The two stages pull in opposite directions by design: the **spec** stage rewards
 - `./spec-reviewer-prompt.md` - Dispatch spec compliance reviewer subagent
 - `./code-quality-reviewer-prompt.md` - Dispatch code quality reviewer subagent
 
-## Example Workflow
+## Rules the process does not state on its own
 
-```
-You: I'm using Subagent-Driven Development to execute this plan.
-
-[Read plan file once: thoughts/shared/plans/feature-plan.md]
-[Extract all 5 tasks with full text and context]
-[Create the task list with TaskCreate (one per task)]
-
-Task 1: Hook installation script
-
-[Get Task 1 text and context (already extracted)]
-[Dispatch implementation subagent with full task text + context]
-
-Implementer: "Before I begin - should the hook be installed at user or system level?"
-
-You: "User level (~/.config/myapp/hooks/)"
-
-Implementer: "Got it. Implementing now..."
-[Later] Implementer:
-  - Implemented install-hook command
-  - Added tests, 5/5 passing
-  - Self-review: Found I missed --force flag, added it
-  - Committed
-
-[Dispatch spec compliance reviewer]
-Spec reviewer: ✅ Spec compliant - all requirements met, nothing extra
-
-[Get git SHAs, dispatch code quality reviewer]
-Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
-
-[Mark Task 1 complete]
-
-Task 2: Recovery modes
-
-[Get Task 2 text and context (already extracted)]
-[Dispatch implementation subagent with full task text + context]
-
-Implementer: [No questions, proceeds]
-Implementer:
-  - Added verify/repair modes
-  - 8/8 tests passing
-  - Self-review: All good
-  - Committed
-
-[Dispatch spec compliance reviewer]
-Spec reviewer: ❌ Issues:
-  - Missing: Progress reporting (spec says "report every 100 items")
-  - Extra: Added --json flag (not requested)
-
-[Dispatch fix subagent: spec gaps + task context]
-Fix subagent: Removed --json flag, added progress reporting
-
-[Spec reviewer reviews again]
-Spec reviewer: ✅ Spec compliant now
-
-[Dispatch code quality reviewer]
-Code reviewer: Strengths: Solid. Issues (Important): Magic number (100)
-
-[Dispatch fix subagent: quality issue + task context]
-Fix subagent: Extracted PROGRESS_INTERVAL constant
-
-[Code reviewer reviews again]
-Code reviewer: ✅ Approved
-
-[Mark Task 2 complete]
-
-...
-
-[After all tasks]
-[Dispatch final code-reviewer]
-Final reviewer: All requirements met, ready to merge
-
-Done!
-```
-
-## Advantages
-
-**vs. Manual execution:**
-- Subagents follow TDD naturally
-- Fresh context per task (no confusion)
-- Independent tasks can run concurrently in worktrees (see Waves)
-- Subagent can ask questions (before AND during work)
-
-**vs. Executing Plans:**
-- Same session (no handoff)
-- Continuous progress (no waiting)
-- Review checkpoints automatic
-
-**Efficiency gains:**
-- No file reading overhead (controller provides full text)
-- Controller curates exactly what context is needed
-- Subagent gets complete information upfront
-- Questions surfaced before work begins (not after)
-
-**Quality gates:**
-- Self-review catches issues before handoff
-- Two-stage review: spec compliance, then code quality
-- Review loops ensure fixes actually work
-- Spec compliance prevents over/under-building
-- Code quality ensures implementation is well-built
-
-**Cost:**
-- More subagent invocations (implementer + 2 reviewers per task)
-- Controller does more prep work (extracting all tasks upfront)
-- Review loops add iterations
-- But catches issues early (cheaper than debugging later)
-
-## Red Flags
-
-**Never:**
-- Start implementation on main/master branch without explicit user consent
-- Skip reviews (spec compliance OR code quality)
-- Proceed with unfixed issues
-- Run implementers concurrently on tasks that share a file or where one depends on the other (see Waves); for fan-outs that are not plan tasks, use the `dispatching-parallel-agents` skill instead
-- Make subagent read plan file (provide full text instead)
-- Skip scene-setting context (subagent needs to understand where task fits)
-- Ignore subagent questions (answer before letting them proceed)
-- Accept "close enough" on spec compliance (spec reviewer found issues = not done)
-- Skip review loops (reviewer found issues = implementer fixes = review again)
-- Let implementer self-review replace actual review (both are needed)
-- **Start code quality review before spec compliance is ✅** (wrong order)
-- Move to next task while either review has open issues
-
-**If subagent asks questions:**
-- Answer clearly and completely
-- Provide additional context if needed
-- Don't rush them into implementation
-
-**If reviewer finds issues:**
-- Dispatch a fresh fix subagent (see "Fixing Review Issues" above) — re-feed the findings + task context
-- Re-run the same reviewer on the result
-- Repeat until approved
-- Don't skip the re-review
-
-**If subagent fails task:**
-- Dispatch fix subagent with specific instructions
-- Don't try to fix manually (context pollution)
+- Start on a branch, not main or master, unless the user said otherwise: the plan may be abandoned or reordered, and a review finding may mean reverting a task.
+- Give the implementer the task's full text and the scene-setting context in the prompt. It starts with a fresh context window and cannot resolve the plan file or skill paths.
+- Spec review before quality review, and a task is complete only when both have approved the current code. A quality reviewer's "approve" on code that then changes for a spec gap is void.
+- The implementer's self-review is a filter, not a review; both stages still run (or the combined pass for a mechanical task).
+- For fan-outs that are not plan tasks, use the `dispatching-parallel-agents` skill instead of this workflow's waves.
 
 ## Integration
 

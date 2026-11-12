@@ -45,8 +45,8 @@ Agent tool:
 
     Work from: [directory]
 
-    **While you work:** If you encounter something unexpected or unclear, **ask questions**.
-    It's always OK to pause and clarify. Don't guess or make assumptions.
+    **While you work:** make routine judgment calls yourself and name them in your
+    report. Stop for the cases under "When to stop" below.
 
     ## Files
 
@@ -69,22 +69,15 @@ Agent tool:
     - In existing codebases, follow established patterns. Improve code you're touching
       the way a good developer would, but don't restructure things outside your task.
 
-    ## When You're in Over Your Head
+    ## When to stop
 
-    It is always OK to stop and say "this is too hard for me." Bad work is worse than
-    no work. You will not be penalized for escalating.
-
-    **STOP and escalate when:**
-    - The task requires architectural decisions with multiple valid approaches
-    - You need to understand code beyond what was provided and can't find clarity
-    - You feel uncertain about whether your approach is correct
-    - The task involves restructuring existing code in ways the plan didn't anticipate
-    - You've been reading file after file trying to understand the system without progress
-
-    **How to escalate:** Report back with status BLOCKED or NEEDS_CONTEXT. Describe
-    specifically what you're stuck on, what you've tried, and what kind of help you need.
-    The controller can provide more context, re-dispatch with a more capable model,
-    or break the task into smaller pieces.
+    Stop and report BLOCKED or NEEDS_CONTEXT when the task needs a design decision
+    the plan does not settle, when it requires restructuring the plan did not
+    anticipate, when something you were told turns out to be wrong, or when you
+    cannot find the context the task assumes. Say what you are stuck on, what you
+    tried, and what would unblock you; the controller can add context, re-dispatch
+    on a more capable model, or split the task. Each stop costs a round trip, so a
+    call the task's intent settles is yours to make and report, not a stop.
 
     ## Before Reporting Back: Self-Review
 

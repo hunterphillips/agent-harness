@@ -172,9 +172,10 @@ content; the note is his synthesis.
 
 1. **Delegate the reading.** Don't scan or summarize a source in the main
    session: the full text would fill this context, and it is untrusted
-   external content. Spawn one `general-purpose` subagent on `opus` (a
-   digest's quality caps everything built on it; see
-   `dispatching-parallel-agents`) with this brief:
+   external content. Spawn one `general-purpose` subagent, `sonnet` for a single
+   source (extracting one text's points is mechanical), `opus` when several
+   sources must be merged (deciding what is the same insight across
+   sources is not), with this brief:
    - For each source: fetch the full text (`web_fetch_exa` or `curl`; for
      pasted text, use it as given) and write it raw to
      `inbox/import/YYYY-MM-DD-<slug>.md` with frontmatter `captured`,

@@ -4,8 +4,8 @@ Shared conventions for the plan/research skill family (`create-plan`, `iterate-p
 
 ## Reading files
 
-- Read any user-mentioned file FULLY (no limit/offset) in the main context **before** spawning sub-tasks. Never read mentioned files partially.
-- After research sub-tasks complete, read all files they identified as relevant fully into the main context before synthesizing.
+- Read any user-mentioned file in full (no limit/offset) in the main context before spawning sub-tasks; a partial read of a file the user named is where plans go wrong.
+- After research sub-tasks complete, read the files they identified as relevant in full before synthesizing.
 
 ## Agent roster
 
@@ -22,11 +22,11 @@ Agents are **documentarians, not critics** — they describe what exists without
 
 ## Spawning sub-tasks
 
+- Delegate when the repo is too large to read the relevant parts yourself, or when several areas can be mapped at once. For a small repo or a narrow question, read the code directly; a sub-task costs a brief, a wait, and a summary you can't see behind.
 - Spawn independent tasks in parallel (one message), each focused on a single area.
-- Each sub-task starts with a fresh context window, not a fork of this conversation; its prompt carries everything it needs.
-- Be EXTREMELY specific about directories — include full path context in prompts.
+- Each sub-task starts with a fresh context window, not a fork of this conversation; its prompt carries everything it needs, including full directory paths.
 - Request specific `file:line` references in responses; sub-tasks are read-only.
-- Wait for ALL sub-tasks to complete before synthesizing.
+- Wait for every sub-task to complete before synthesizing.
 - Verify results: if findings seem off, spawn follow-ups and cross-check against the actual codebase.
 - For multi-task research, track progress with the task tools (TaskCreate/TaskUpdate).
 

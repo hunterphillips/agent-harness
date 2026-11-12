@@ -1,6 +1,6 @@
 # Generate PR Description
 
-You are tasked with generating a comprehensive pull request description following the repository's standard template.
+Write the pull request description, following the repository's template, for a reader deciding whether to merge.
 
 ## Steps to follow:
 
@@ -27,12 +27,7 @@ You are tasked with generating a comprehensive pull request description followin
    - Review the base branch: `gh pr view {number} --json baseRefName`
    - Get PR metadata: `gh pr view {number} --json url,title,number,state`
 
-5. **Analyze the changes:** the code changes, their architectural implications, and potential impacts
-   - Read through the entire diff carefully
-   - For context, read any files that are referenced but not shown in the diff
-   - Understand the purpose and impact of each change
-   - Identify user-facing changes vs internal implementation details
-   - Look for breaking changes or migration requirements
+5. **Read the diff**, and the files it references that it doesn't show. The description needs: what changed and why, what a user sees differently, and any breaking change or migration step.
 
 6. **Handle verification requirements:**
    - Look for any checklist items in the "How to verify it" section of the template
@@ -43,14 +38,7 @@ You are tasked with generating a comprehensive pull request description followin
      - If it requires manual testing (UI interactions, external services), leave unchecked and note for user
    - Document any verification steps you couldn't complete
 
-7. **Generate the description:**
-   - Fill out each section from the template thoroughly:
-     - Answer each question/section based on your analysis
-     - Be specific about problems solved and changes made
-     - Focus on user impact where relevant
-     - Include technical details in appropriate sections
-     - Write a concise changelog entry
-   - Ensure all checklist items are addressed (checked or explained)
+7. **Write the description** section by section from the template: the problem solved, the change made, user impact where there is any, technical detail where the template asks, a changelog entry. Every checklist item is checked or explained.
 
 8. **Save the description:**
    - Write the completed description to `thoughts/shared/prs/{number}_description.md`
@@ -61,11 +49,7 @@ You are tasked with generating a comprehensive pull request description followin
    - Confirm the update was successful
    - If any verification steps remain unchecked, remind the user to complete them before merging
 
-## Important notes:
-- This command works across different repositories - always read the local template
-- Be thorough but concise - descriptions should be scannable
-- Focus on the "why" as much as the "what"
-- Include any breaking changes or migration notes prominently
-- If the PR touches multiple components, organize the description accordingly
-- Always attempt to run verification commands when possible
-- Clearly communicate which verification steps need manual testing
+## Notes
+- Always read the local template; repositories differ.
+- Breaking changes and migration notes go near the top.
+- Say which verification steps still need manual testing.

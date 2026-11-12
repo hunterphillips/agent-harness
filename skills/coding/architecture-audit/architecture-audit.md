@@ -8,7 +8,7 @@ Systematic codebase audit. Run against `$ARGUMENTS` (defaults to current project
 
 - Only flag things that would actually matter to a working engineer on this project.
 - A finding without concrete evidence (file paths, import chains, line counts, command output) is not a finding. Drop it.
-- If the codebase is well-structured, say so. A short review of a healthy codebase is an acceptable outcome.
+- If the codebase is well-structured, say so and stop; the review's length follows the findings, not the template.
 - Do not manufacture concerns to fill sections. Empty severity categories are fine — omit them entirely.
 - Do not recommend restructuring unless the current structure is causing real, demonstrable problems.
 - Do not flag things just because they deviate from some platonic ideal. Consistency within the project matters more than matching a textbook pattern.
@@ -28,6 +28,8 @@ Use subagents to build a picture of the project efficiently.
 ### Map the structure
 
 Use `codebase-locator` to get a full map of the project layout, entry points, and file organization. Ask it to locate implementation files, test files, configuration, and type definitions for the project root.
+
+The commands in this file are for a TypeScript repo; for another stack, use its equivalents (import-cycle, dead-code, and unused-dependency checkers) and note which you ran.
 
 ### Check for circular dependencies and coupling hotspots
 
@@ -186,6 +188,5 @@ npx tsc --noEmit
 ### Report rules
 
 - Every finding must cite specific files, line counts, or command output.
-- Omit sections with nothing to report. A short review is a good review.
+- Omit sections with nothing to report.
 - Recommendations must be actionable — "extract X from Y into Z", not "improve separation of concerns."
-- If the codebase is in good shape, the review should be short and say so.

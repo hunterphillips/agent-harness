@@ -12,7 +12,7 @@ Shared conventions: [research-conventions.md](./research-conventions.md) (file r
 ## Step 1: Context Gathering & Initial Analysis
 
 1. Read all mentioned files fully — yourself, in the main context, before any sub-tasks.
-2. Spawn initial research in parallel: **codebase-locator** (find related files), **codebase-analyzer** (understand current implementation), **thoughts-locator** (existing thoughts docs) — per the conventions file.
+2. Research the area: in a large repo, spawn **codebase-locator** (find related files), **codebase-analyzer** (understand current implementation), and **thoughts-locator** (existing thoughts docs) in parallel, per the conventions file; in a small one, or when the ticket names the files, read them yourself.
 3. Read all files the research identified as relevant.
 4. Cross-reference ticket requirements with actual code; note discrepancies, assumptions to verify, and true scope.
 5. Present informed understanding:

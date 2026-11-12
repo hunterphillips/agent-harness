@@ -130,7 +130,7 @@ the system lane's business, checked on demand, not monthly). Scan for:
   self-assessments — belongs in personal-context; flag for a proposal)
 
 No profile lookup is part of the audit or the drain: both work on the
-shape and provenance of notes, not on who Hunter is (decision 2026-09-19).
+shape and provenance of notes, not on who Hunter is.
 
 Before flagging, verify against the freshest evidence:
 
@@ -170,9 +170,11 @@ Study notes — something Hunter read or researched, filed by topic in
 `notes/learning/<topic>.md` (vault write rule 10). Sources are external
 content; the note is his synthesis.
 
-1. **Delegate the reading.** Never scan or summarize a source in the main
-   session. Spawn one `general-purpose` subagent — `sonnet` for a single
-   source, `opus` when several sources must be merged — with this brief:
+1. **Delegate the reading.** Don't scan or summarize a source in the main
+   session: the full text would fill this context, and it is untrusted
+   external content. Spawn one `general-purpose` subagent on `opus` (a
+   digest's quality caps everything built on it; see
+   `dispatching-parallel-agents`) with this brief:
    - For each source: fetch the full text (`web_fetch_exa` or `curl`; for
      pasted text, use it as given) and write it raw to
      `inbox/import/YYYY-MM-DD-<slug>.md` with frontmatter `captured`,
@@ -208,9 +210,8 @@ never manages it in two places:
    Bearer $(cat ~/.config/suyo/token)"`; the file holds the
    token of a device paired on hub for this machine, and a machine without it
    needs its own pairing (a code from `app/bin/pair` on hub, posted to
-   `/api/auth/pair` with `"transport": "bearer"`). Since 2026-10-21 the
-   goals are one list ordered by hand, the first the most important (no
-   sections). Ops: `add {title, why?, due?, links?}` (lands last), `edit
+   `/api/auth/pair` with `"transport": "bearer"`). The goals are one list ordered by hand,
+   the first the most important (no sections). Ops: `add {title, why?, due?, links?}` (lands last), `edit
    {id, title?, why?, due?, links?}`, `move {id, order}` with `order` every
    active goal's id exactly once, top first, `done {id}`, `drop {id}`,
    `reopen {id}` (lands last). Read first to get ids and the current order;

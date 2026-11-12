@@ -14,7 +14,7 @@ Parse the input for a plan file path (e.g., `thoughts/shared/plans/2025-10-16-fe
 
 ## Step 1: Read and Understand
 
-Read the existing plan FULLY (no limit/offset). Understand its structure, phases, scope, and success criteria. Parse exactly what the user wants added/modified/removed and whether it requires codebase research.
+Read the existing plan in full (no limit/offset). Understand its structure, phases, scope, and success criteria. Parse exactly what the user wants added/modified/removed and whether it requires codebase research.
 
 ## Step 2: Research If Needed
 

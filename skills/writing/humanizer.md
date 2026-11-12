@@ -76,12 +76,15 @@ Announcing the move instead of making it ("Let's dive in," "The takeaway is," "I
 
 ## Output
 
-1. Draft rewrite
-2. Targeted audit: the structural tells still present, as brief bullets (omit if none)
-3. Final rewrite
-4. Summary of changes, only if it helps the reader
+1. The rewrite
+2. A targeted audit of it: the structural tells still present, as brief bullets, each fixed in place (omit if none)
+3. Summary of changes, only if it helps the reader
+
+Write the text once and fix what the audit finds; a second full rewrite drifts from the source.
 
 When generating prose rather than editing it, draft clean from the start with these patterns in mind.
+
+The before/after pairs in this file and in `patterns.md` are illustrative; some "after" lines carry figures or sources that were made up for the example. Never add a fact, figure, or source the original lacks.
 
 ## Example
 

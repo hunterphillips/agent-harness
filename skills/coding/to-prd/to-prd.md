@@ -35,7 +35,7 @@ B2. A balance request that fails shows the last known balance with a stale marke
 
 ## User Stories
 
-A LONG, numbered list of user stories covering all aspects of the feature, each in the format:
+A numbered list of user stories, one per actor and flow the feature serves (no padding to a length), each in the format:
 
 1. As an <actor>, I want a <feature>, so that <benefit>
 

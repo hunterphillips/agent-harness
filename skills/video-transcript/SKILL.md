@@ -46,7 +46,7 @@ The script prints title, channel, upload date, duration, canonical URL, and chap
 
 ## Analyzing
 
-For long videos, pipe output to a scratch file and read relevant sections selectively instead of placing the entire transcript in context. Quote the script's timestamps when citing the video.
+A long transcript can go to a scratch file to read in parts; a typical one fits in context. Run with `--timestamps` when you will cite moments in the video, and quote them.
 
 ## First-Run Behavior
 

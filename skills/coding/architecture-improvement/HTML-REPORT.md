@@ -47,12 +47,12 @@ Each candidate is one `<article>`:
 - **Badge row** — recommendation strength (`Strong` = emerald, `Worth exploring` = amber, `Speculative` = slate), plus a tag for the dependency category (`in-process`, `local-substitutable`, `ports & adapters`, `mock`).
 - **Files** — monospaced list, `font-mono text-sm`.
 - **Before / After diagram** — the centrepiece. Two columns, side by side. See patterns below.
-- **Problem** — one sentence. What hurts.
-- **Solution** — one sentence. What changes.
-- **Wins** — bullets, ≤6 words each. e.g. "Tests hit one interface", "Pricing logic stops leaking", "Delete 4 shallow wrappers".
-- **ADR callout** (if applicable) — one line in an amber-tinted box.
+- **Problem** — what hurts.
+- **Solution** — what changes.
+- **Wins** — short bullets, in terms of locality and leverage. e.g. "Tests hit one interface", "Pricing logic stops leaking", "Delete 4 shallow wrappers".
+- **ADR callout** (if applicable) — in an amber-tinted box.
 
-No paragraphs of explanation. If the diagram needs a paragraph to be understood, redraw the diagram.
+The text states only what the diagram can't. If the diagram needs a paragraph to be understood, redraw the diagram.
 
 ## Diagram patterns
 
@@ -101,7 +101,7 @@ Before: a tree of function calls rendered as nested boxes. After: the same tree 
 
 ## Top recommendation section
 
-One larger card. Candidate name, one sentence on why, anchor link to its card. That's it.
+One larger card: candidate name, why it comes first, anchor link to its card.
 
 ## Tone
 

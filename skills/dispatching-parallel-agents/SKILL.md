@@ -7,7 +7,9 @@ description: Use when facing 2+ independent tasks that can be worked on without 
 
 ## Overview
 
-Delegate independent tasks to subagents with isolated context. Start each one with a fresh context window, never a fork of this conversation, and construct exactly what it needs — which keeps them focused and preserves your own context for coordination.
+Delegate independent tasks to subagents with isolated context. Start each one with a fresh context window, never a fork of this conversation (a fork inherits the session's context and the session model, and the model policy keeps session models out of fan-outs), and construct exactly what it needs — which keeps them focused and preserves your own context for coordination.
+
+**What a subagent costs.** Each one is a brief you write, a wait, and a report you can't see behind: the context you hand it is all it knows, and a mistake comes back in the same register as a finding. Several at once spend tokens in a burst. Delegate when the work is parallel, when it would flood your context with file dumps, or when it needs an unanchored read; do a handful of tool calls yourself.
 
 **Core principle:** One agent per independent problem domain. Dispatch them concurrently.
 
@@ -31,7 +33,7 @@ digraph when_to_use {
 ```
 
 **Use when:**
-- 3+ test files failing with different root causes
+- Two or more test files failing with different root causes
 - Multiple subsystems broken independently
 - Each problem is understandable without context from the others
 - No shared state between investigations
@@ -50,7 +52,8 @@ Parallelism = multiple `Agent` calls **in a single message**. Calls in the same 
 - **`subagent_type`** — pick the right agent: `general-purpose` for fix/implement tasks; `Explore`, `codebase-locator`, or `codebase-analyzer` for read-only investigation.
 - **`model`** — with N agents, the per-agent tier is an N× cost decision; choose it deliberately rather than inheriting the session model by default. Default to `opus`; use `sonnet` for mechanical work (reformatting, bulk transforms, sweeping greps). Extraction/note-taking/digestion is **not** mechanical — its quality caps everything built on it downstream.
 - **`isolation: "worktree"`** — give each *editing* agent its own git worktree so concurrent writes can't clobber each other. Use whenever agents touch overlapping paths.
-- **`run_in_background: true`** — for long agents you want to monitor while continuing other work.
+- **`run_in_background: true`** — for a long agent while you continue other work; it notifies you when it finishes, so don't poll it.
+- **`SendMessage`** continues an agent you already spawned with its context intact (a re-review, a follow-up question); a new `Agent` call starts from nothing.
 
 ```
 # One message → three concurrent agents:
@@ -76,12 +79,10 @@ Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts:
 2. "should handle mixed completed and aborted tools" — fast tool aborted instead of completed
 3. "should properly track pendingToolCount" — expects 3 results, gets 0
 
-Likely timing/race issues. Steps:
-1. Read the test file; understand what each test verifies
-2. Find the root cause — real bug vs. test timing?
-3. Fix by replacing arbitrary timeouts with event-based waiting; fix abort bugs if found
-
-Do NOT just increase timeouts. Do NOT change unrelated code.
+Find the root cause before changing anything: a real abort bug and a test that
+races the abort look the same from the failure. Fix tests only, don't touch
+production code; if the cause is in production code, say so and stop.
+Increasing timeouts is not a fix.
 Return: root cause + exact changes made.
 ```
 

@@ -19,7 +19,7 @@ List `thoughts/shared/lanes/` and read each `handoff.md` frontmatter (`lane`, `d
 - **Argument given**: match it against lane names and descriptions **semantically** — the user won't know exact lane names. "the frontend refactor work" resolves to a lane described as "components, styling, UX flows". Peek at candidates' handoff bodies if descriptions don't settle it (resolution reads are exempt from Step 3's scoping, which applies after resolution). **State the resolution before proceeding** ("picking up **ui** — Frontend look/feel") so a wrong match is caught immediately. Genuinely ambiguous → ask, showing the candidates.
 - **No argument**: list lanes as one-liners — name · description · updated date · headline next step — plus a count of backlog tickets (Step 3.3) if any exist, and ask which to pick up.
 
-**Fallbacks**: no `lanes/` directory but `.claude/pickup.md` exists → read that instead (legacy format; the next `/handoff` migrates it, leaving a `.migrated` rename behind as the marker). Neither exists → say so and ask what to work on.
+**Fallback**: no `lanes/` directory → say so and ask what to work on.
 
 ## Step 3: Load Lane State
 

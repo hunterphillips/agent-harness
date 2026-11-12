@@ -23,8 +23,7 @@ thoughts/shared/lanes/<lane-name>/handoff.md
 2. **Determine which lane(s) this session worked.** Infer from the session's actual work; arguments override inference. Match inferences against existing lane descriptions **semantically** — "frontend refactor" matches a lane described as "components, styling, UX flows" even though no words overlap. Ambiguous match → ask. Nothing fits → propose a new short kebab-case lane name with a one-line description and confirm before creating.
 3. **Check `git status` and `git diff`** for uncommitted changes.
 4. **Write one `handoff.md` per worked lane** (create directories as needed). A session that touched multiple lanes writes each lane's file separately — split the content now, while you still have the context to split it correctly. Each fact goes to the lane it belongs to; don't duplicate shared context across files.
-5. **Absorb legacy state**: if `.claude/pickup.md` exists, fold its still-relevant content into the lane file(s) — this session's facts supersede stale legacy notes — then rename it to `.claude/pickup.md.migrated`.
-6. **Run `/write-claude-md`** to refresh `CLAUDE.md` (and `README.md` if drifted) and ensure it still conforms to the principles outlined in write-claude-md.
+5. **Run `/write-claude-md`** to refresh `CLAUDE.md` (and `README.md` if drifted) and ensure it still conforms to the principles outlined in write-claude-md.
 
 ## File Format
 

@@ -14,7 +14,7 @@ If no research question was provided, ask for one and wait.
 
 2. **Decompose the research question**: break it into composable research areas, covering the patterns, connections, and architectural implications the user is likely after. Track sub-tasks with the task tools (TaskCreate/TaskUpdate).
 
-3. **Spawn parallel sub-agents** per the conventions file: **codebase-locator** (WHERE), **codebase-analyzer** (HOW), **codebase-pattern-finder** (existing examples); **thoughts-locator/analyzer** for historical context; **web-search-researcher** only if explicitly requested. All agents are documentarians, not critics.
+3. **Spawn parallel sub-agents** per the conventions file (for a question one or two files answer, read them instead): **codebase-locator** (WHERE), **codebase-analyzer** (HOW), **codebase-pattern-finder** (existing examples); **thoughts-locator/analyzer** for historical context; **web-search-researcher** only if explicitly requested. All agents are documentarians, not critics.
 
 4. **Synthesize** after ALL sub-agents complete:
    - Prioritize live codebase findings as the primary source of truth; `thoughts/` is supplementary historical context.
@@ -75,7 +75,7 @@ If no research question was provided, ask for one and wait.
 ## Important Notes
 
 - Always run fresh codebase research — never rely solely on existing research documents.
-- Keep the main agent focused on synthesis, not deep file reading; encourage sub-agents to find usage examples, not just definitions.
+- Sub-agents find usage examples, not just definitions; the main session reads the files that matter itself before synthesizing.
 - Research documents should be self-contained, with temporal context and consistent snake_case frontmatter.
 - Explore all of `thoughts/`, not just the research subdirectory.
 - **Path handling**: `thoughts/searchable/` contains hard links for searching — when documenting, strip ONLY the `searchable/` segment and preserve everything else (e.g. `thoughts/searchable/shared/prs/123.md` → `thoughts/shared/prs/123.md`). Never swap personal vs shared subdirectories.

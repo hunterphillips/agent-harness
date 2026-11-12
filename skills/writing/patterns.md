@@ -96,7 +96,7 @@ Any one of these is fine. The tell is density.
 - **Em dashes** as sentence glue where a comma, period, or "because" belongs.
 - **Colon chains**, "claim: elaboration" at every joint. Colons still introduce a list, a definition, or a counted enumeration. Fix order: own sentence, then comma appositive, then "because" or "so."
 - **Boldface** on phrases mechanically, and **inline-header lists** ("- **Speed:** queries are faster") where a sentence would carry it.
-- **Markdown in flowing prose**: headers, bullets, bolded lead-ins in an essay, report, or message. Lists are for content that is a list.
+- **Markdown in flowing prose**: headers, bullets, bolded lead-ins in an essay, a letter, or a short message. Formatting is right when the content has that shape: a list for items, a table for things compared on the same axes, headings for a document someone navigates.
 - **Fragmented headers**: a heading followed by a one-line restatement of the heading before the real content.
 - **Title Case In Headings**, **emojis** on bullets, **curly quotes**.
 

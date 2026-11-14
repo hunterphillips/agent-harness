@@ -91,6 +91,8 @@ Agent tool:
     **Quality:**
     - Is this my best work?
     - Are names clear and accurate (match what things do, not how they work)?
+      Where the field has an established term for the concept, did I use it
+      rather than coin one?
     - Is the code clean and maintainable?
 
     **Discipline:**

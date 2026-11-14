@@ -50,6 +50,9 @@ Agent tool:
     - Comments say something the code doesn't? Flag ones that restate the code or
       narrate the process.
     - Where the implementer hit a wrong premise, was it fixed or patched around?
+    - Names use the field's established term and the project glossary's? A coined
+      name for a known concept, or a standard word in a nonstandard sense, is a
+      finding: agents and readers act on the standard meaning. UI copy is exempt.
 
     **Architecture:**
     - Sound design decisions?

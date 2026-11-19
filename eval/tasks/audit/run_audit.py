@@ -32,7 +32,7 @@ PROMPT = (
     "/coding Run an architecture audit of this repository. This is an unattended run: make the calls the "
     "workflow supports and do not ask questions. When the audit is done, also write every finding to "
     "audit-findings.json in the repository root as a JSON list of objects with fields path, kind, severity, "
-    "evidence, where kind is one of: {kinds}."
+    "evidence, where kind is one of: {kinds}. A finding that spans several files gets one object per file."
 )
 
 

@@ -131,6 +131,11 @@ def failure(proc):
     return (errors[0] if errors else lines[-1] if lines else f"exit {proc.returncode}")[:300]
 
 
+def parse_git_date(text):
+    """Git prints UTC dates with a Z suffix, which fromisoformat rejects before Python 3.11."""
+    return datetime.fromisoformat(text.strip().replace("Z", "+00:00"))
+
+
 def git(root, *args):
     return subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args], cwd=root,
                           capture_output=True, text=True, check=True).stdout
@@ -568,7 +573,7 @@ def hotspots(commits_per_file, file_ccn):
 
 def snapshot(root, kind, with_packages):
     commit = git(root, "rev-parse", "HEAD").strip()
-    commit_date = datetime.fromisoformat(git(root, "show", "-s", "--format=%cI", commit).strip())
+    commit_date = parse_git_date(git(root, "show", "-s", "--format=%cI", commit))
     files = list_files(root)
     sources, generated = split_sources(root, files)
     snap = {
@@ -688,8 +693,8 @@ def compare(history):
 # --- backfill --------------------------------------------------------------
 
 def backfill(root, days, points, history):
-    head_date = datetime.fromisoformat(git(root, "show", "-s", "--format=%cI", "HEAD").strip())
-    first_date = datetime.fromisoformat(git(root, "log", "--first-parent", "--reverse", "--format=%cI").split()[0])
+    head_date = parse_git_date(git(root, "show", "-s", "--format=%cI", "HEAD"))
+    first_date = parse_git_date(git(root, "log", "--first-parent", "--reverse", "--format=%cI").split()[0])
     span = timedelta(days=days)
     if head_date - first_date < span:
         # A repository younger than DAYS spreads its points over its own history,

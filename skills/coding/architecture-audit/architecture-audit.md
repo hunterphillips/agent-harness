@@ -28,7 +28,7 @@ Reading the snapshot:
 
 ## Investigate
 
-Start with the hotspots, then the clones, the catch and test candidates, and the cycles. Generated files, listed in `details.generated_files`, are outside the audit, because their content belongs to the generator.
+Start with the hotspots, then the clones, the catch and test candidates, and the cycles. Generated files are outside the audit (`details.generated_files` lists the first 50, and the rest match the same directories and header comments), because their content belongs to the generator.
 
 Then read past the numbers: the entry points, and anything `CONTEXT.md` or `docs/adr/` says the code must do. The metrics miss problems no tool counts, such as a module nothing reaches, a module everything imports, or UI code that queries the database directly. Use `codebase-analyzer` when a data flow needs tracing.
 

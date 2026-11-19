@@ -59,6 +59,8 @@ class SeededFixture(unittest.TestCase):
     def test_generated_files_are_not_sources(self):
         self.assertEqual(self.snap["metrics"]["files"], 16)
         self.assertEqual(self.snap["generated_files"], 2)
+        self.assertEqual(set(self.snap["details"]["generated_files"]),
+                         {path for c in SEEDS["controls"] if c["kind"] == "generated" for path in c["paths"]})
 
     def test_complex_function(self):
         seed = DEFECTS[3]

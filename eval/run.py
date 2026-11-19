@@ -503,6 +503,30 @@ def summarize_trace(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def claude_arm_args(model: str, turns: int, budget: float) -> list[str]:
+    """The headless claude command an arm runs; the prompt goes on stdin."""
+    return [
+        "claude",
+        "-p",
+        "--model",
+        model,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--no-session-persistence",
+        "--dangerously-skip-permissions",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--no-chrome",
+        *TOOL_FLAGS,
+        "--max-turns",
+        str(turns),
+        "--max-budget-usd",
+        f"{budget:.2f}",
+    ]
+
+
 def run_arm(task: Task, replicate: int, arm: str, result_dir: Path, model: str) -> dict[str, Any]:
     key = f"arm:{task.id}:{replicate}:{arm}"
     with tempfile.TemporaryDirectory(prefix="eval-candidate-") as temp:
@@ -514,26 +538,7 @@ def run_arm(task: Task, replicate: int, arm: str, result_dir: Path, model: str) 
             deploy_configuration(workspace)
 
         limit = limits_for(task)
-        args = [
-            "claude",
-            "-p",
-            "--model",
-            model,
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--no-session-persistence",
-            "--dangerously-skip-permissions",
-            "--setting-sources",
-            "project",
-            "--strict-mcp-config",
-            "--no-chrome",
-            *TOOL_FLAGS,
-            "--max-turns",
-            str(limit["turns"]),
-            "--max-budget-usd",
-            f"{limit['budget']:.2f}",
-        ]
+        args = claude_arm_args(model, limit["turns"], limit["budget"])
         if arm == "control":
             args.append("--safe-mode")
         completed, wall_duration_ms = run_command(

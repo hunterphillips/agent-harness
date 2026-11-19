@@ -21,6 +21,7 @@ import json
 import math
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,7 @@ CHURN_DAYS = 90
 TOP_HOTSPOTS = 15
 TOP_LONGEST = 10
 TOP_CLONES = 20
+TOP_GENERATED = 50
 
 JS_EXTENSIONS = {".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"}
 PY_EXTENSIONS = {".py"}
@@ -92,8 +94,8 @@ ASSERTION = {
 }
 
 # Each metric produced by a tool names it; --compare refuses a pair measured
-# with different versions of that tool. The rest are computed here and compare
-# only under the same METRICS_VERSION.
+# with different versions of that tool. Every metric, a tool's included,
+# compares only under the same METRICS_VERSION.
 METRIC_TOOL = {
     "functions_over_ccn_15": "lizard", "ccn_p90": "lizard",
     "duplicated_lines": "jscpd", "duplicated_lines_pct": "jscpd", "clones": "jscpd",
@@ -108,11 +110,18 @@ def run(cmd, cwd):
     env = {**os.environ, "NO_COLOR": "1", "FORCE_COLOR": "0"}
     cmd = [str(c) for c in cmd]
     try:
-        return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=TOOL_TIMEOUT)
+        # A session of its own, so a timeout kills npx's children along with npx.
+        proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                start_new_session=True)
     except FileNotFoundError:
         return subprocess.CompletedProcess(cmd, 127, "", f"{cmd[0]} not found on PATH")
+    try:
+        stdout, stderr = proc.communicate(timeout=TOOL_TIMEOUT)
     except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.communicate()
         return subprocess.CompletedProcess(cmd, 124, "", f"timed out after {TOOL_TIMEOUT} s")
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
 
 
 def failure(proc):
@@ -578,7 +587,7 @@ def snapshot(root, kind, with_packages):
                "files_per_commit_p90": percentile(per_commit, 0.9)}
     details = {**complexity_details, "clones": clones,
                "hotspots": hotspots(commits_per_file, lizard["file_ccn"]) if lizard else None,
-               **lexical_details}
+               **lexical_details, "generated_files": generated[:TOP_GENERATED]}
     snap["tools"] = {"lizard": lizard_result, "jscpd": jscpd_result, "lexical": lexical_result}
     if with_packages:
         package_metrics(root, files, sources, snap, metrics)
@@ -640,12 +649,13 @@ def flatten(metrics, prefix=""):
     return flat
 
 
-def producer(snap, name):
-    """Who produced a metric and at which version: the tool, or this script's METRICS_VERSION."""
+def producers(snap, name):
+    """What a metric's value depends on: this script's METRICS_VERSION, and for a tool metric the tool's version."""
+    versions = {"metrics_version": snap.get("metrics_version")}
     tool = METRIC_TOOL.get(name.split(".")[0])
     if tool:
-        return tool, snap.get("tools", {}).get(tool, {}).get("version")
-    return "metrics_version", snap.get("metrics_version")
+        versions[tool] = snap.get("tools", {}).get(tool, {}).get("version")
+    return versions
 
 
 def compare(history):
@@ -656,13 +666,15 @@ def compare(history):
     before, after = flatten(earlier["metrics"]), flatten(later["metrics"])
     changes, not_comparable = {}, []
     for name in sorted(set(before) | set(after)):
-        (tool, version_before), (_, version_after) = producer(earlier, name), producer(later, name)
+        versions_before, versions_after = producers(earlier, name), producers(later, name)
+        changed = [f"{key} {versions_before[key]} then {versions_after[key]}"
+                   for key in versions_before if versions_before[key] != versions_after[key]]
         if name not in before or name not in after:
             reason = f"missing from the {'earlier' if name not in before else 'later'} snapshot"
         elif before[name] is None or after[name] is None:
             reason = f"null in the {'earlier' if before[name] is None else 'later'} snapshot"
-        elif version_before != version_after:
-            reason = f"{tool} {version_before} then {version_after}"
+        elif changed:
+            reason = "; ".join(changed)
         else:
             change = after[name] - before[name]
             changes[name] = {"before": before[name], "after": after[name], "change": round(change, 4),

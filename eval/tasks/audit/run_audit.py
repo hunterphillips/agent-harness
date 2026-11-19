@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE / "seeded"), str(HERE.parents[1])]
 import build  # noqa: E402
 import check_report  # noqa: E402
-from run import (ARM_MODEL, ROOT, TOOL_FLAGS, deploy_configuration, parse_claude_json,  # noqa: E402
+from run import (ARM_MODEL, ROOT, claude_arm_args, deploy_configuration, parse_claude_json,  # noqa: E402
                  parse_events, run_command, summarize_trace)
 
 SEEDS = HERE / "seeded" / "seeds.json"
@@ -78,23 +78,30 @@ def main():
     with tempfile.TemporaryDirectory(prefix="audit-run-") as tmp:
         workspace = Path(tmp) / "fixture"
         prepare(workspace, args.ref, tmp)
-        command = ["claude", "-p", "--model", args.model, "--output-format", "stream-json", "--verbose",
-                   "--no-session-persistence", "--dangerously-skip-permissions", "--setting-sources", "project",
-                   "--strict-mcp-config", "--no-chrome", *TOOL_FLAGS, "--max-turns", str(TURNS),
-                   "--max-budget-usd", f"{BUDGET:.2f}"]
-        completed, _ = run_command(command, cwd=workspace, input_text=PROMPT.format(kinds=kinds), timeout=TIMEOUT)
-        (args.out_dir / "events.jsonl").write_text(completed.stdout, encoding="utf-8")
-        envelope = parse_claude_json(completed.stdout)
-        (args.out_dir / "reply.md").write_text(str(envelope.get("result", "")), encoding="utf-8")
+        try:
+            completed, _ = run_command(claude_arm_args(args.model, TURNS, BUDGET), cwd=workspace,
+                                       input_text=PROMPT.format(kinds=kinds), timeout=TIMEOUT)
+            stdout, exit_code = completed.stdout, completed.returncode
+        except subprocess.TimeoutExpired as error:
+            stdout, exit_code = error.stdout or "", f"timed out after {TIMEOUT} s"
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+        # Keep the artifacts before anything can fail on a broken or partial run.
+        (args.out_dir / "events.jsonl").write_text(stdout, encoding="utf-8")
         audits = workspace / "thoughts" / "shared" / "audits"
         if audits.is_dir():
             shutil.copytree(audits, args.out_dir / "audits", dirs_exist_ok=True)
         if (workspace / "audit-findings.json").is_file():
             shutil.copy(workspace / "audit-findings.json", args.out_dir)
 
-    events = parse_events(completed.stdout)
+    try:
+        envelope = parse_claude_json(stdout)
+    except ValueError:
+        envelope = {}
+    (args.out_dir / "reply.md").write_text(str(envelope.get("result", "")), encoding="utf-8")
+    events = parse_events(stdout)
     trace = summarize_trace(events)
-    summary = {"ref": args.ref or "working tree", "model": args.model, "exit_code": completed.returncode,
+    summary = {"ref": args.ref or "working tree", "model": args.model, "exit_code": exit_code,
                "turns": envelope.get("num_turns"), "cost_usd": envelope.get("total_cost_usd"),
                "skill_calls": trace["skill_calls"], "skill_files_read": trace["skill_files_read"],
                "workflow_used": mentions(events, "architecture-audit.md"), "metrics_used": mentions(events, "metrics.py")}

@@ -5,8 +5,9 @@
 
 FINDINGS is a JSON list of objects with path, kind, severity and evidence.
 A seed counts as found when a finding names one of its paths with its kind.
-A finding on a clean control's path is a false positive. Exits non-zero when
-fewer than 7 of the 8 seeds are found or any false positive exists.
+A finding on a clean control's path, or on a directory holding one (. included),
+is a false positive. Severity is not scored. Exits non-zero when fewer than 7
+of the 8 seeds are found or any false positive exists.
 """
 import json
 import re
@@ -16,8 +17,12 @@ REQUIRED_SEEDS = 7
 
 
 def normalize(path):
-    """A finding's path without a leading ./ or a trailing :line or :start-end."""
-    return re.sub(r":\d+(?:-\d+)?$", "", path.strip()).removeprefix("./")
+    """A finding's path without a leading ./, a trailing /, or a trailing :line, :line:col or :start-end."""
+    return re.sub(r"(?::\d+)+(?:-\d+)?$", "", path.strip()).removeprefix("./").rstrip("/") or "."
+
+
+def covers(path, control):
+    return path in (control, ".") or control.startswith(path + "/")
 
 
 def score(findings, seeds):
@@ -25,7 +30,7 @@ def score(findings, seeds):
     found = [d for d in seeds["defects"] if any((path, d["kind"]) in named for path in d["paths"])]
     missed = [d for d in seeds["defects"] if d not in found]
     controls = {path for control in seeds["controls"] for path in control["paths"]}
-    false_positives = [f for f in findings if normalize(f["path"]) in controls]
+    false_positives = [f for f in findings if any(covers(normalize(f["path"]), c) for c in controls)]
     return found, missed, false_positives
 
 

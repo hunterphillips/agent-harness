@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # Bump METRICS_VERSION when a change here alters what a metric counts.
-METRICS_VERSION = 1
+METRICS_VERSION = 2
 VERSIONS = {"lizard": "1.25.1", "jscpd": "5.4.2", "madge": "8.0.0", "knip": "6.44.2"}
 TOOL_TIMEOUT = 300
 CCN_THRESHOLD = 15
@@ -107,7 +107,10 @@ METRIC_TOOL = {
 # --- helpers ---------------------------------------------------------------
 
 def run(cmd, cwd):
-    env = {**os.environ, "NO_COLOR": "1", "FORCE_COLOR": "0"}
+    # madge reads these through rc: an `import type` vanishes at compile time, so it is not a cycle edge.
+    env = {**os.environ, "NO_COLOR": "1", "FORCE_COLOR": "0",
+           "madge_detectiveOptions__ts__skipTypeImports": "true",
+           "madge_detectiveOptions__tsx__skipTypeImports": "true"}
     cmd = [str(c) for c in cmd]
     try:
         # A session of its own, so a timeout kills npx's children along with npx.

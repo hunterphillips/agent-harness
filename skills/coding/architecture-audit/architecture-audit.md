@@ -19,6 +19,7 @@ Without `thoughts/shared/`, run `metrics.py` alone and say the report has no com
 Reading the snapshot:
 
 - `metrics` holds the counts and `details` the locations behind them. The candidate lists (`empty_catch_candidates`, `skipped_tests`, `test_files_without_assertions`, `hotspots`, `clones`) are places to read, not findings: they come from lexical matches and rankings, and only the code says whether a match is a defect.
+- `cycles` leaves out `import type` edges, which do not exist at run time.
 - `hotspots` ranks production files by commits in the 90 days before the snapshot times summed cyclomatic complexity.
 - A null metric was not measured, which is different from zero. Report it as not measured, with the tool's `skipped` reason in the coverage part of the report.
 - `tools.<tool>.skipped` names partial coverage: source files outside every package, and the packages where a tool was incomplete. `packages[].<tool>.skipped` gives each package's reason; for madge that includes imports it could not resolve, whose edges are missing, so a cycle through them goes unseen.
@@ -36,14 +37,14 @@ Code that contradicts an ADR is a finding. A finding whose fix would reverse an 
 
 ## Test probe
 
-A probe checks whether a hotspot's tests notice a broken behaviour. Run it only on a clean working tree, so restoring the file cannot discard anyone's work, and on at most three hotspots that have tests:
+A probe checks whether a hotspot's tests notice a broken behaviour. Run it only on a clean working tree that no other session is using, so the edit cannot break someone's run and restoring the file cannot discard anyone's work, and on at most three hotspots that have tests:
 
 1. Run the module's tests. Continue only if they pass.
 2. Change one line so that behaviour the module's callers rely on is different.
 3. Run the same command. Record the mutation, the command, and both results.
 4. Restore the file with `git checkout -- <file>`.
 
-Tests that still pass mark a place where coverage may be missing; report it with the mutation shown. A probe that could not run is reported as not run, with the reason: no clean tree, no runnable tests, or a failing baseline.
+Tests that still pass mark a place where coverage may be missing; report it with the mutation shown. A probe that could not run is reported as not run, with the reason: no clean tree, a shared checkout, no runnable tests, or a failing baseline.
 
 ## Severity
 
@@ -51,7 +52,7 @@ A metric's size does not set severity; consequence and reach do, and a history o
 
 | Severity | Criteria |
 | --- | --- |
-| Critical | Wrong behaviour now, or an error swallowed where data is written or identity is checked |
+| Critical | Wrong behaviour now on a path users depend on, or an error swallowed where data is written or identity is checked |
 | High | A defect or design problem on a path many features pass through, or one that has already forced repeated changes |
 | Medium | A real problem confined to one area; a surviving test probe on a hotspot |
 | Low | A real problem in code that rarely changes and few things depend on |

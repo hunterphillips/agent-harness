@@ -12,10 +12,13 @@ import concurrent.futures
 import copy
 import dataclasses
 import datetime as dt
+import hashlib
 import json
 import math
 import os
+import posixpath
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -32,20 +35,44 @@ EVAL_DIR = ROOT / "eval"
 RESULTS_DIR = EVAL_DIR / "results"
 ARM_NAMES = ("configured", "control")
 POSITIONS = (("configured", "control"), ("control", "configured"))
-TOOLS = "Bash,Read,Edit,Write,Glob,Grep"
+# The fixture commit, kept as a ref so an arm amending that commit cannot move it.
+BASELINE_REF = "refs/eval/baseline"
+# Withheld from both arms: web access, and every tool that acts on the owner's
+# account or reaches other sessions (schedules, triggers, notifications,
+# messaging, worktrees, workflows, design sync).
+WITHHELD_TOOLS = (
+    "WebFetch",
+    "WebSearch",
+    "RemoteTrigger",
+    "CronCreate",
+    "CronDelete",
+    "CronList",
+    "PushNotification",
+    "ScheduleWakeup",
+    "DesignSync",
+    "Workflow",
+    "SendMessage",
+    "ListAgents",
+    "Monitor",
+    "EnterWorktree",
+    "ExitWorktree",
+)
+TOOL_FLAGS = ("--tools", "default", "--disallowedTools", ",".join(WITHHELD_TOOLS))
 ARM_MODEL = "claude-opus-5"
 JUDGE_MODEL = "gpt-5.6-sol"
 JUDGE_REASONING_EFFORT = "high"
+# Both arms share one ceiling per battery.
 CLAUDE_LIMITS = {
-    "writing": {
-        "control": {"turns": 6, "budget": 1.00},
-        "configured": {"turns": 12, "budget": 2.00},
-    },
-    "coding": {
-        "control": {"turns": 20, "budget": 3.00},
-        "configured": {"turns": 40, "budget": 6.00},
-    },
+    "writing": {"turns": 12, "budget": 2.00},
+    "coding": {"turns": 40, "budget": 6.00},
 }
+# Every UI task's checks.py delegates to these.
+UI_GATE_FILES = (EVAL_DIR / "tasks" / "ui" / "gate.py", EVAL_DIR / "tasks" / "ui" / "browser.cjs")
+SKILL_PATH = re.compile(r"\.claude/skills/[^\s'\"`;|&()<>]+")
+SKILL_DIRECTORY = re.compile(r"\.claude/skills(?:/\S*)?$")
+SKILL_FILE_EXTENSIONS = (".md", ".py", ".sh", ".csv", ".json", ".cjs")
+# This CLI names the subagent tool Task and accepts Agent as an alias.
+SUBAGENT_TOOLS = {"Agent", "Task"}
 # Identifying strings that must never reach the judge. Responses get them
 # redacted (candidates may innocently use words like "bare" or "test harness",
 # so those generic words are only banned in our own template text below).
@@ -225,6 +252,7 @@ def initialize_repo(workspace: Path) -> None:
     git(workspace, "config", "user.email", "eval@example.invalid")
     git(workspace, "add", ".")
     git(workspace, "commit", "-qm", "fixture baseline", "--allow-empty")
+    git(workspace, "update-ref", BASELINE_REF, "HEAD")
     exclude = workspace / ".git" / "info" / "exclude"
     with exclude.open("a", encoding="utf-8") as handle:
         handle.write("\n.claude/\n__pycache__/\n*.pyc\n.pytest_cache/\n.coverage\n")
@@ -242,19 +270,32 @@ def deploy_configuration(workspace: Path) -> None:
     )
 
 
+def limits_for(task: Task) -> dict[str, float]:
+    # Writing tasks that ship a codebase need coding-scale turn/budget room
+    # for the exploration phase; the artifact is still the response text.
+    return CLAUDE_LIMITS["coding" if task.fixture_repo is not None else task.battery]
+
+
+def slash_command(task: Task, arm: str) -> str | None:
+    # The configured arm invokes its skill explicitly, mirroring how the user
+    # actually works (/writing …, /coding …). Control has no skills to invoke.
+    if arm != "configured":
+        return None
+    return "/writing" if task.battery == "writing" else "/coding"
+
+
 def make_agent_prompt(task: Task, arm: str) -> str:
+    command = slash_command(task, arm)
+    prefix = f"{command}\n" if command else ""
     if task.battery == "writing":
         source = f"\n\nSOURCE MATERIAL\n{task.source}" if task.source else ""
-        # The configured arm invokes the writing skill explicitly, mirroring how
-        # the user actually works (/writing …). Control has no skills to invoke.
-        prefix = "/writing\n" if arm == "configured" else ""
         return (
             f"{prefix}Complete the writing task below. Return only the requested final deliverable; "
             "do not describe your process.\n\n"
             f"TASK\n{task.prompt}{source}"
         )
     return (
-        "Work directly in the current repository and complete the task below. "
+        f"{prefix}Work directly in the current repository and complete the task below. "
         "Run relevant tests or checks available in the repository. Do not only explain a solution; "
         "make the requested file changes.\n\n"
         f"TASK\n{task.prompt}"
@@ -296,19 +337,18 @@ def token_total(usage: dict[str, Any] | None) -> int | None:
 
 
 def changed_paths(workspace: Path) -> list[str]:
-    output = git(workspace, "status", "--porcelain=v1", "--untracked-files=all")
-    paths: list[str] = []
-    for line in output.splitlines():
-        raw = line[3:]
-        if " -> " in raw:
-            raw = raw.split(" -> ", 1)[1]
-        if not raw.startswith(".claude/"):
-            paths.append(raw)
-    return sorted(paths)
+    # Against the baseline rather than HEAD, so unstaged, staged and committed
+    # work are judged alike.
+    tracked = git(workspace, "diff", "--name-only", "--no-renames", BASELINE_REF, "--", ".")
+    untracked = git(workspace, "ls-files", "--others", "--exclude-standard")
+    paths = set(tracked.splitlines()) | set(untracked.splitlines())
+    return sorted(path for path in paths if path and not path.startswith(".claude/"))
 
 
 def collect_code_artifact(workspace: Path, gate: dict[str, Any], *, ui: bool = False) -> str:
-    patch = git(workspace, "diff", "--no-ext-diff", "--no-color", "HEAD", "--", ".")
+    # Intent-to-add puts new files in the patch whether or not the arm committed them.
+    git(workspace, "add", "--intent-to-add", ".")
+    patch = git(workspace, "diff", "--no-ext-diff", "--no-color", BASELINE_REF, "--", ".")
     files = set(git(workspace, "ls-files").splitlines())
     files.update(changed_paths(workspace))
     sections: list[str] = []
@@ -363,7 +403,105 @@ def render_ui(workspace: Path, result_dir: Path) -> dict[str, str]:
     return {size: str((result_dir / f"{size}.png").resolve()) for size in ("desktop", "phone")}
 
 
-def run_arm(task: Task, replicate: int, arm: str, result_dir: Path) -> dict[str, Any]:
+def parse_events(stdout: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+    return events
+
+
+def bash_skill_paths(command: str, directory: str | None) -> tuple[list[str], str | None]:
+    """Skill paths a Bash command names, and the skill directory it leaves as cwd.
+
+    Agents read workflow files as `cd .claude/skills/coding && cat tdd/tdd.md`,
+    so a file argument after a `cd` into a skill directory resolves against it.
+    Two known over-counts after such a `cd`: heredoc body lines are parsed as
+    commands, and a redirect target (`> notes.md`) counts as a read.
+    """
+    paths: list[str] = []
+    for segment in re.split(r"&&|\|\||[;|\n]", command):
+        try:
+            words = shlex.split(segment)
+        except ValueError:
+            words = segment.split()
+        if not words:
+            continue
+        if words[0] == "cd":
+            target = words[1] if len(words) > 1 else ""
+            match = SKILL_DIRECTORY.search(target)
+            if match:
+                directory = posixpath.normpath(match.group(0))
+            elif directory and target and not target.startswith(("/", "~", "-")):
+                directory = path_if_in_skills_tree(posixpath.normpath(posixpath.join(directory, target)))
+            else:
+                directory = None
+            continue
+        for word in words[1:]:
+            match = SKILL_PATH.search(word)
+            if match:
+                path = posixpath.normpath(match.group(0))
+            elif directory and not word.startswith("-"):
+                path = posixpath.normpath(posixpath.join(directory, word))
+            else:
+                continue
+            # Only file arguments count; directories and search patterns do not.
+            if path_if_in_skills_tree(path) and path.endswith(SKILL_FILE_EXTENSIONS):
+                paths.append(path)
+    return paths, directory
+
+
+def path_if_in_skills_tree(path: str) -> str | None:
+    return path if path == ".claude/skills" or path.startswith(".claude/skills/") else None
+
+
+def summarize_trace(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """What an arm loaded, from its stream-json events (subagent events included)."""
+    tools_available: list[str] = []
+    skill_calls: list[str] = []
+    skill_files_read: list[str] = []
+    subagents = 0
+    # A cd carries to the next Bash call in the main session only; a subagent's
+    # shell resets on every call.
+    main_directory: str | None = None
+    for event in events:
+        if event.get("type") == "system" and event.get("subtype") == "init":
+            tools_available = event.get("tools", [])
+        if event.get("type") != "assistant":
+            continue
+        in_subagent = event.get("parent_tool_use_id") is not None
+        for block in event.get("message", {}).get("content", []):
+            if block.get("type") != "tool_use":
+                continue
+            tool_input = block.get("input", {})
+            if block["name"] == "Skill":
+                skill_calls.append(tool_input.get("skill"))
+            elif block["name"] in SUBAGENT_TOOLS:
+                subagents += 1
+            elif block["name"] == "Read":
+                match = SKILL_PATH.search(tool_input.get("file_path", ""))
+                if match:
+                    skill_files_read.append(posixpath.normpath(match.group(0)))
+            elif block["name"] == "Bash":
+                paths, directory = bash_skill_paths(
+                    tool_input.get("command", ""), None if in_subagent else main_directory
+                )
+                if not in_subagent:
+                    main_directory = directory
+                skill_files_read.extend(paths)
+    return {
+        "skill_calls": skill_calls,
+        "skill_files_read": skill_files_read,
+        "subagents": subagents,
+        "tools_available": tools_available,
+    }
+
+
+def run_arm(task: Task, replicate: int, arm: str, result_dir: Path, model: str) -> dict[str, Any]:
     key = f"arm:{task.id}:{replicate}:{arm}"
     with tempfile.TemporaryDirectory(prefix="eval-candidate-") as temp:
         workspace = Path(temp)
@@ -373,27 +511,22 @@ def run_arm(task: Task, replicate: int, arm: str, result_dir: Path) -> dict[str,
         if arm == "configured":
             deploy_configuration(workspace)
 
-        # Writing tasks that ship a codebase need coding-scale turn/budget room
-        # for the exploration phase; the artifact is still the response text.
-        limit_battery = "coding" if task.fixture_repo is not None else task.battery
-        limit = CLAUDE_LIMITS[limit_battery][arm]
+        limit = limits_for(task)
         args = [
             "claude",
             "-p",
             "--model",
-            ARM_MODEL,
+            model,
             "--output-format",
-            "json",
+            "stream-json",
+            "--verbose",
             "--no-session-persistence",
             "--dangerously-skip-permissions",
             "--setting-sources",
             "project",
             "--strict-mcp-config",
             "--no-chrome",
-            "--tools",
-            TOOLS,
-            "--allowedTools",
-            TOOLS,
+            *TOOL_FLAGS,
             "--max-turns",
             str(limit["turns"]),
             "--max-budget-usd",
@@ -404,6 +537,9 @@ def run_arm(task: Task, replicate: int, arm: str, result_dir: Path) -> dict[str,
         completed, wall_duration_ms = run_command(
             args, cwd=workspace, input_text=make_agent_prompt(task, arm)
         )
+        result_dir.mkdir(parents=True, exist_ok=True)
+        events_path = result_dir / "events.jsonl"
+        events_path.write_text(completed.stdout, encoding="utf-8")
         parse_error: str | None = None
         try:
             envelope = parse_claude_json(completed.stdout)
@@ -434,6 +570,9 @@ def run_arm(task: Task, replicate: int, arm: str, result_dir: Path) -> dict[str,
             "exit_code": completed.returncode,
             "is_error": bool(envelope.get("is_error", completed.returncode != 0)),
             "parse_error": parse_error,
+            "slash_command": slash_command(task, arm),
+            **summarize_trace(parse_events(completed.stdout)),
+            "events_path": str(events_path.resolve()),
             "result": artifact,
             "response_chars": len(artifact),
             "response_words": len(artifact.split()),
@@ -699,7 +838,8 @@ def mapped_winner(winner: str, label_map: dict[str, str]) -> str:
 
 
 def agreed_winner(first: str, second: str) -> str:
-    return first if first == second and first != "tie" else "tie"
+    """Both label orders must agree. Agreeing on no winner is a tie; disagreeing is no verdict."""
+    return first if first == second else "no_verdict"
 
 
 def dimensions_for(battery: str) -> list[str]:
@@ -722,7 +862,8 @@ def reconcile_replicate(
         second_pass = bool(arms["control"].get("gate", {}).get("passed"))
         if first_pass != second_pass:
             winner = "configured" if first_pass else "control"
-            per_dimension = {dimension: "tie" for dimension in dimensions}
+            # Judging is skipped, so no other dimension has a verdict.
+            per_dimension = {dimension: "no_verdict" for dimension in dimensions}
             per_dimension["correctness_scope"] = winner
             return {
                 "replicate": replicate,
@@ -734,8 +875,8 @@ def reconcile_replicate(
     if len(judges) != 2 or any(not record.get("verdict") for record in judges):
         return {
             "replicate": replicate,
-            "overall": "tie",
-            "dimensions": {dimension: "tie" for dimension in dimensions},
+            "overall": "no_verdict",
+            "dimensions": {dimension: "no_verdict" for dimension in dimensions},
             "basis": "incomplete_judging",
         }
 
@@ -764,15 +905,12 @@ def reconcile_replicate(
 
 
 def majority(values: Iterable[str]) -> str:
+    """The outcome of more than half the replicates; no majority, or no replicates, is no verdict."""
     values = list(values)
-    configured = values.count("configured")
-    control = values.count("control")
-    threshold = len(values) / 2
-    if configured > threshold:
-        return "configured"
-    if control > threshold:
-        return "control"
-    return "tie"
+    for outcome in ("configured", "control", "tie"):
+        if values.count(outcome) > len(values) / 2:
+            return outcome
+    return "no_verdict"
 
 
 def metric_stats(records: list[dict[str, Any]], field: str) -> dict[str, float | int | None]:
@@ -824,7 +962,7 @@ def aggregate(tasks: list[Task], records: list[dict[str, Any]], replicates: int)
 
     def win_summary(field: str | None = None) -> dict[str, Any]:
         winners = [result["winner"] if field is None else result["dimensions"][field] for result in task_results]
-        weighted = {name: 0.0 for name in ("configured", "control", "tie")}
+        weighted = {name: 0.0 for name in ("configured", "control", "tie", "no_verdict")}
         counts = {name: winners.count(name) for name in weighted}
         for task, winner in zip(tasks, winners, strict=True):
             weighted[winner] += task.weight
@@ -866,19 +1004,51 @@ def fmt_number(value: float | int | None, digits: int = 2) -> str:
     return f"{value:.{digits}f}"
 
 
-def markdown_summary(metadata: dict[str, Any], aggregate_result: dict[str, Any]) -> str:
+def loaded_summary(record: dict[str, Any]) -> list[str]:
+    """Markdown cells for what one arm loaded; records journaled before tracing show n/a."""
+    if "skill_files_read" not in record:
+        return ["n/a"] * 5
+    files = record["skill_files_read"]
+    distinct = list(dict.fromkeys(path.removeprefix(".claude/skills/") for path in files))
+    return [
+        record["slash_command"] or "none",
+        ", ".join(record["skill_calls"]) or "none",
+        f"{len(files)}" + (f": {', '.join(distinct)}" if distinct else ""),
+        str(record["subagents"]),
+        str(len(record["tools_available"])),
+    ]
+
+
+def tool_difference(records: list[dict[str, Any]]) -> str | None:
+    """One line naming tools offered to one arm and not the other."""
+    tools = {arm: set() for arm in ARM_NAMES}
+    for record in records:
+        tools[record["arm"]].update(record.get("tools_available", []))
+    if not all(tools.values()):
+        return None
+    only = {arm: sorted(tools[arm] - tools[other]) for arm, other in (ARM_NAMES, ARM_NAMES[::-1])}
+    if not any(only.values()):
+        return "Same tools in both arms."
+    return " ".join(
+        f"Only {arm}: {', '.join(names)}." for arm, names in only.items() if names
+    )
+
+
+def markdown_summary(
+    metadata: dict[str, Any], aggregate_result: dict[str, Any], records: list[dict[str, Any]]
+) -> str:
     quality = aggregate_result["quality"]
     overall = quality["overall"]
-    rate = overall["configured_win_rate_decisive"]
     lines = [
         f"# {metadata['battery'].title()} eval — {metadata['run_id']}",
         "",
-        f"Replicates: {metadata['replicates']} per task. A verdict is decisive only when both label orderings agree.",
+        f"Replicates: {metadata['replicates']} per task. A replicate is decided only when both label orderings agree; "
+        "a missing judge result or disagreeing orderings is no verdict.",
         "",
         "## Quality",
         "",
-        "| Dimension | Configured wins | Control wins | Ties | Configured win rate (decisive) |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| Dimension | Configured wins | Control wins | Ties | No verdict | Configured win rate (decisive) |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     rows = [("Overall", overall), *[(name, value) for name, value in quality["dimensions"].items()]]
     for name, value in rows:
@@ -886,7 +1056,7 @@ def markdown_summary(metadata: dict[str, Any], aggregate_result: dict[str, Any])
         formatted_rate = "n/a" if value["configured_win_rate_decisive"] is None else f"{value['configured_win_rate_decisive']:.1%}"
         lines.append(
             f"| {name.replace('_', ' ').title()} | {counts['configured']} | {counts['control']} | "
-            f"{counts['tie']} | {formatted_rate} |"
+            f"{counts['tie']} | {counts['no_verdict']} | {formatted_rate} |"
         )
     lines.extend(
         [
@@ -899,6 +1069,25 @@ def markdown_summary(metadata: dict[str, Any], aggregate_result: dict[str, Any])
     )
     for task in aggregate_result["task_results"]:
         lines.append(f"| {task['task_id']} | {task['weight']:g} | {task['winner']} |")
+    lines.extend(
+        [
+            "",
+            "## What each arm loaded",
+            "",
+            "| Task | Replicate | Arm | Slash command | Skill calls | Skill files read | Subagents | Tools |",
+            "| --- | ---: | --- | --- | --- | --- | ---: | ---: |",
+        ]
+    )
+    arm_records = sorted(
+        (record for record in records if record["kind"] == "arm"),
+        key=lambda record: (metadata["task_ids"].index(record["task_id"]), record["replicate"], record["arm"]),
+    )
+    for record in arm_records:
+        cells = [record["task_id"], str(record["replicate"]), record["arm"], *loaded_summary(record)]
+        lines.append("| " + " | ".join(cells) + " |")
+    difference = tool_difference(arm_records)
+    if difference:
+        lines.extend(["", difference])
     lines.extend(
         [
             "",
@@ -943,14 +1132,83 @@ def print_dry_run(tasks: list[Task], replicates: int) -> None:
     print("Dry run: no agent or judge command was executed and no result file was written.")
 
 
-def metadata_for(run_id: str, battery: str, tasks: list[Task], replicates: int) -> dict[str, Any]:
+def tree_digest(files: Iterable[tuple[str, bytes]]) -> str:
+    """sha256 over (name, content) pairs in name order."""
+    digest = hashlib.sha256()
+    for name, content in sorted(files):
+        digest.update(name.encode() + b"\0" + hashlib.sha256(content).digest())
+    return digest.hexdigest()
+
+
+def files_under(root: Path) -> list[tuple[str, bytes]]:
+    """Files under root, without OS and bytecode litter that varies between machines."""
+    return [
+        (path.relative_to(root).as_posix(), path.read_bytes())
+        for path in root.rglob("*")
+        if path.is_file()
+        and path.name != ".DS_Store"
+        and path.suffix != ".pyc"
+        and "__pycache__" not in path.parts
+    ]
+
+
+def task_digest(task: Task) -> str:
+    # The rendered prompts, so a change to the prompt builder or slash prefix shows.
+    named = [(f"prompt/{arm}", make_agent_prompt(task, arm).encode()) for arm in ARM_NAMES]
+    files = [*([task.check_script] if task.check_script else [])]
+    if task.battery == "ui":
+        files.extend(UI_GATE_FILES)
+    named.extend((path.relative_to(EVAL_DIR).as_posix(), path.read_bytes()) for path in files)
+    if task.fixture_repo is not None:
+        named.extend(
+            (f"{task.fixture_repo.relative_to(EVAL_DIR).as_posix()}/{name}", content)
+            for name, content in files_under(task.fixture_repo)
+        )
+    return tree_digest(named)
+
+
+def fingerprint(tasks: list[Task], model: str) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="eval-config-") as temp:
+        deploy_configuration(Path(temp))
+        config = tree_digest(files_under(Path(temp) / ".claude"))
+    version = subprocess.run(["claude", "--version"], text=True, capture_output=True, check=True).stdout
+    return {
+        "config_sha256": config,
+        "tasks": {task.id: {"sha256": task_digest(task), "ceilings": limits_for(task)} for task in tasks},
+        "model": model,
+        "claude_version": version.strip(),
+        "tool_flags": list(TOOL_FLAGS),
+    }
+
+
+def fingerprint_differences(stored: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    differences = [
+        label
+        for field, label in (
+            ("config_sha256", "config tree"),
+            ("model", "model"),
+            ("claude_version", "CLI version"),
+            ("tool_flags", "tool flags"),
+        )
+        if stored.get(field) != current[field]
+    ]
+    for task_id, entry in current["tasks"].items():
+        previous = stored.get("tasks", {}).get(task_id, {})
+        if previous.get("sha256") != entry["sha256"]:
+            differences.append(f"{task_id} prompt/fixture/checks")
+        if previous.get("ceilings") != entry["ceilings"]:
+            differences.append(f"{task_id} ceilings")
+    return differences
+
+
+def metadata_for(run_id: str, battery: str, tasks: list[Task], replicates: int, model: str) -> dict[str, Any]:
     return {
         "run_id": run_id,
         "battery": battery,
         "replicates": replicates,
         "task_ids": [task.id for task in tasks],
         "created_at": dt.datetime.now(dt.UTC).isoformat(),
-        "arm_model": ARM_MODEL,
+        "arm_model": model,
         "judge_model": JUDGE_MODEL,
         "judge_reasoning_effort": JUDGE_REASONING_EFFORT,
         "position_swap": "both orderings per replicate; agreement required",
@@ -964,6 +1222,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task", help="run one task id")
     parser.add_argument("--dry-run", action="store_true", help="show planned work without invoking a model")
     parser.add_argument("--replicates", type=int, default=3)
+    parser.add_argument("--model", default=ARM_MODEL, help=f"model for both arms (default: {ARM_MODEL})")
     parser.add_argument("--resume", metavar="RUN_ID", help="continue an interrupted run journal")
     parser.add_argument(
         "--rejudge",
@@ -999,28 +1258,43 @@ def main(argv: list[str] | None = None) -> int:
         if not meta_path.exists():
             parser.error(f"resume metadata not found: {meta_path}")
         metadata = json.loads(meta_path.read_text(encoding="utf-8"))
-        expected = metadata_for(run_id, args.battery, tasks, args.replicates)
+        expected = metadata_for(run_id, args.battery, tasks, args.replicates, args.model)
         for field in ("battery", "replicates", "task_ids"):
             if metadata.get(field) != expected[field]:
                 parser.error(f"resume mismatch for {field}")
+        # Arms from another config, task, model, CLI, or ceiling are not comparable.
+        # A rejudge run's arms are fixed; only its judging resumes.
+        if "rejudged_from" not in metadata:
+            if "fingerprint" not in metadata:
+                parser.error(
+                    "resume refused: the run predates fingerprints, so its arms ran under other tools and prompts"
+                )
+            differences = fingerprint_differences(metadata["fingerprint"], fingerprint(tasks, args.model))
+            if differences:
+                parser.error(f"resume refused: fingerprint differs in {', '.join(differences)}")
     else:
         if meta_path.exists() or journal_path.exists():
             parser.error(f"result id collision: {run_id}; retry in one second")
-        metadata = metadata_for(run_id, args.battery, tasks, args.replicates)
+        metadata = metadata_for(run_id, args.battery, tasks, args.replicates, args.model)
         if args.rejudge:
+            source_meta_path = RESULTS_DIR / f"{args.rejudge}.meta.json"
+            source_journal_path = RESULTS_DIR / f"{args.rejudge}.records.jsonl"
+            if not source_meta_path.exists() or not source_journal_path.exists():
+                parser.error(f"rejudge source not found: {args.rejudge}")
+            source_meta = json.loads(source_meta_path.read_text(encoding="utf-8"))
+            for field in ("battery", "replicates", "task_ids"):
+                if source_meta.get(field) != metadata[field]:
+                    parser.error(f"rejudge mismatch for {field}")
+            # The arms, and so their model and fingerprint, belong to the source run.
             metadata["rejudged_from"] = args.rejudge
+            metadata["arm_model"] = source_meta["arm_model"]
+            metadata["fingerprint"] = source_meta.get("fingerprint")
+        else:
+            metadata["fingerprint"] = fingerprint(tasks, args.model)
         meta_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     journal = Journal(journal_path)
     if args.rejudge:
-        source_meta_path = RESULTS_DIR / f"{args.rejudge}.meta.json"
-        source_journal_path = RESULTS_DIR / f"{args.rejudge}.records.jsonl"
-        if not source_meta_path.exists() or not source_journal_path.exists():
-            parser.error(f"rejudge source not found: {args.rejudge}")
-        source_meta = json.loads(source_meta_path.read_text(encoding="utf-8"))
-        for field in ("battery", "replicates", "task_ids"):
-            if source_meta.get(field) != metadata[field]:
-                parser.error(f"rejudge mismatch for {field}")
-        for record in Journal(source_journal_path).records.values():
+        for record in Journal(RESULTS_DIR / f"{args.rejudge}.records.jsonl").records.values():
             if record["kind"] == "arm" and not journal.get(record["key"]):
                 journal.append(record)
 
@@ -1036,7 +1310,7 @@ def main(argv: list[str] | None = None) -> int:
                         arm_records[arm] = existing
                     else:
                         result_dir = RESULTS_DIR / run_id / task.id / str(replicate) / arm
-                        pending[executor.submit(run_arm, task, replicate, arm, result_dir)] = arm
+                        pending[executor.submit(run_arm, task, replicate, arm, result_dir, args.model)] = arm
                 for future in concurrent.futures.as_completed(pending):
                     arm = pending[future]
                     record = future.result()
@@ -1071,7 +1345,7 @@ def main(argv: list[str] | None = None) -> int:
     json_path = RESULTS_DIR / f"{run_id}.json"
     markdown_path = RESULTS_DIR / f"{run_id}.md"
     json_path.write_text(json.dumps(final, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    markdown_path.write_text(markdown_summary(metadata, aggregate_result), encoding="utf-8")
+    markdown_path.write_text(markdown_summary(metadata, aggregate_result, records), encoding="utf-8")
     print(f"Wrote {json_path}")
     print(f"Wrote {markdown_path}")
     return 0

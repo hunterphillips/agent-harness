@@ -23,26 +23,30 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def status_paths(repo: Path) -> list[str]:
-    result = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    return sorted(line[3:].split(" -> ")[-1] for line in result.stdout.splitlines())
+# Set by the runner's initialize_repo at the fixture commit.
+BASELINE_REF = "refs/eval/baseline"
+
+
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", *args], cwd=repo, text=True, capture_output=True, check=True).stdout
+
+
+def changed_paths(repo: Path) -> list[str]:
+    # Against the fixture baseline, so unstaged, staged and committed work count alike.
+    tracked = git(repo, "diff", "--name-only", "--no-renames", BASELINE_REF)
+    untracked = git(repo, "ls-files", "--others", "--exclude-standard")
+    return sorted(set(tracked.splitlines()) | set(untracked.splitlines()))
 
 
 def main() -> int:
     repo = Path(sys.argv[1]).resolve()
-    changed = status_paths(repo)
+    changed = changed_paths(repo)
     if changed != ["invoice/report.py"]:
         print(f"FAIL touched files: expected ['invoice/report.py'], got {changed}")
         return 1
 
     baseline_test = subprocess.run(
-        ["git", "show", "HEAD:tests/test_report.py"],
+        ["git", "show", f"{BASELINE_REF}:tests/test_report.py"],
         cwd=repo,
         capture_output=True,
         check=True,

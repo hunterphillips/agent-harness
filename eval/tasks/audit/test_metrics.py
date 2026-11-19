@@ -57,7 +57,7 @@ class SeededFixture(unittest.TestCase):
         self.assertEqual(self.status_after, "")
 
     def test_generated_files_are_not_sources(self):
-        self.assertEqual(self.snap["metrics"]["files"], 15)
+        self.assertEqual(self.snap["metrics"]["files"], 16)
         self.assertEqual(self.snap["generated_files"], 2)
 
     def test_complex_function(self):
@@ -68,12 +68,16 @@ class SeededFixture(unittest.TestCase):
                          (seed["paths"][0], seed["function"], seed["ccn"]))
 
     def test_complex_file_ranks_first_among_hotspots(self):
-        self.assertEqual(self.snap["details"]["hotspots"][0]["path"], DEFECTS[3]["paths"][0])
+        hotspots = self.snap["details"]["hotspots"]
+        self.assertEqual(hotspots[0]["path"], DEFECTS[3]["paths"][0])
+        # Ranking by commits alone, or by complexity alone, would put another file first.
+        self.assertNotEqual(max(hotspots, key=lambda h: h["commits"])["path"], hotspots[0]["path"])
+        self.assertNotEqual(max(hotspots, key=lambda h: h["ccn"])["path"], hotspots[0]["path"])
 
     def test_function_copied_into_three_files(self):
         self.assertTrue(set(DEFECTS[2]["paths"]) <= clone_files(self.snap))
 
-    def test_duplicated_block_in_large_file(self):
+    def test_clone_inside_a_1200_line_file(self):
         path = DEFECTS[8]["paths"][0]
         self.assertEqual(len((self.repo / path).read_text().splitlines()), DEFECTS[8]["lines"])
         self.assertIn(path, clone_files(self.snap))
@@ -109,6 +113,34 @@ class SeededFixture(unittest.TestCase):
     def test_clean_controls_are_not_flagged(self):
         self.assertFalse(flagged_paths(self.snap) & CONTROL_PATHS)
 
+    def test_metrics_from_a_different_tool_version_are_not_compared(self):
+        later = json.loads(json.dumps(self.snap))
+        later["tools"]["jscpd"]["version"] = "0.0.0"
+        history = Path(self.tmp.name) / "versions.jsonl"
+        history.write_text(json.dumps(self.snap) + "\n" + json.dumps(later) + "\n")
+        result = json.loads(subprocess.run([sys.executable, str(METRICS), "--compare", str(history)],
+                                           capture_output=True, text=True, check=True).stdout)
+        refused = {entry["metric"]: entry["reason"] for entry in result["not_comparable"]}
+        for metric in ("duplicated_lines", "duplicated_lines_pct", "clones"):
+            self.assertIn("jscpd", refused[metric])
+        self.assertIn("functions_over_ccn_15", result["changes"])
+
+
+class NothingInScope(unittest.TestCase):
+    def test_a_repo_with_no_ts_js_or_python_reports_null_not_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            git(tmp, "init", "-q")
+            (Path(tmp) / "main.go").write_text("package main\n\nfunc main() {}\n")
+            git(tmp, "add", "-A")
+            git(tmp, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
+                "commit", "-q", "-m", "go")
+            snap = json.loads(measure(tmp))
+        for metric in ("suppressions", "empty_catch_candidates", "skipped_tests", "test_files_without_assertions",
+                       "duplicated_lines", "duplicated_lines_pct", "clones", "cycles", "unused_files"):
+            self.assertIsNone(snap["metrics"][metric], metric)
+        for tool in ("lexical", "jscpd", "madge", "knip"):
+            self.assertTrue(snap["tools"][tool]["skipped"], tool)
+
 
 class History(unittest.TestCase):
     def setUp(self):
@@ -130,8 +162,8 @@ class History(unittest.TestCase):
         (self.repo / "pkg-core" / "src" / "extra.ts").write_text("export const extra = 1;\n")
         measure(self.repo, "--append", str(self.history))
         result = self.compare()
-        self.assertEqual(result["changes"]["files"], {"before": 15, "after": 16, "change": 1,
-                                                      "relative_change": round(1 / 15, 4)})
+        self.assertEqual(result["changes"]["files"], {"before": 16, "after": 17, "change": 1,
+                                                      "relative_change": round(1 / 16, 4)})
         self.assertIsNone(result["changes"]["suppressions.as any"]["relative_change"])
         self.assertIn("unused_files", [entry["metric"] for entry in result["not_comparable"]])
 
@@ -141,6 +173,7 @@ class History(unittest.TestCase):
         self.assertEqual(git(self.repo, "worktree", "list"), worktrees)
         history = [json.loads(line) for line in self.history.read_text().splitlines()]
         self.assertEqual([snap["kind"] for snap in history], ["history"] * 3)
+        self.assertEqual(history[0]["backfill"], {"requested_days": 90, "span_days": 90.0})
         dates = [snap["date"] for snap in history]
         self.assertEqual(dates, sorted(set(dates)))
         audit = json.loads(measure(self.repo, "--append", str(self.history)))

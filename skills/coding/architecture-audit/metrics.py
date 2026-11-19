@@ -6,7 +6,8 @@
     metrics.py --compare FILE                       compare FILE's last line with the line before it
     metrics.py [REPO] --backfill DAYS [--points N] [--append FILE]
                                                     snapshot N evenly spaced ancestors of HEAD
-                                                    from the last DAYS days, oldest first
+                                                    from the last DAYS days, oldest first; a
+                                                    younger repository spreads them over its history
 
 Standard library only. lizard runs through uvx and jscpd, madge and knip
 through npx, each at the pinned version below. Nothing is installed into the
@@ -14,6 +15,8 @@ measured repository and no tool writes inside it. A metric a tool could not
 produce is null, and the tool's entry says why.
 """
 import argparse
+import fnmatch
+import functools
 import json
 import math
 import os
@@ -26,7 +29,10 @@ from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Bump METRICS_VERSION when a change here alters what a metric counts.
+METRICS_VERSION = 1
 VERSIONS = {"lizard": "1.25.1", "jscpd": "5.4.2", "madge": "8.0.0", "knip": "6.44.2"}
+TOOL_TIMEOUT = 300
 CCN_THRESHOLD = 15
 CHURN_DAYS = 90
 TOP_HOTSPOTS = 15
@@ -85,8 +91,9 @@ ASSERTION = {
     "py": re.compile(r"^\s*assert\b|\.assert\w*\(|pytest\.raises|\.fail\(", re.M),
 }
 
-# Each comparable metric names the tool that produced it; --compare refuses a
-# pair measured with different versions of that tool.
+# Each metric produced by a tool names it; --compare refuses a pair measured
+# with different versions of that tool. The rest are computed here and compare
+# only under the same METRICS_VERSION.
 METRIC_TOOL = {
     "functions_over_ccn_15": "lizard", "ccn_p90": "lizard",
     "duplicated_lines": "jscpd", "duplicated_lines_pct": "jscpd", "clones": "jscpd",
@@ -99,10 +106,13 @@ METRIC_TOOL = {
 
 def run(cmd, cwd):
     env = {**os.environ, "NO_COLOR": "1", "FORCE_COLOR": "0"}
+    cmd = [str(c) for c in cmd]
     try:
-        return subprocess.run([str(c) for c in cmd], cwd=cwd, env=env, capture_output=True, text=True)
+        return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=TOOL_TIMEOUT)
     except FileNotFoundError:
         return subprocess.CompletedProcess(cmd, 127, "", f"{cmd[0]} not found on PATH")
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 124, "", f"timed out after {TOOL_TIMEOUT} s")
 
 
 def failure(proc):
@@ -115,6 +125,12 @@ def failure(proc):
 def git(root, *args):
     return subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args], cwd=root,
                           capture_output=True, text=True, check=True).stdout
+
+
+@functools.cache
+def git_has_since_as_filter():
+    version = re.search(r"(\d+)\.(\d+)", subprocess.run(["git", "--version"], capture_output=True, text=True).stdout)
+    return bool(version) and (int(version[1]), int(version[2])) >= (2, 37)
 
 
 def read(root, path):
@@ -152,6 +168,10 @@ def is_test_path(path):
     return any(part in TEST_DIRS for part in parts[:-1]) or bool(TEST_NAME.search(parts[-1]))
 
 
+def is_under(path, directory):
+    return directory == "." or path.startswith(directory + "/")
+
+
 # --- sources and packages --------------------------------------------------
 
 def list_files(root):
@@ -178,7 +198,7 @@ def find_packages(files):
 
 def package_of(path, packages):
     """The innermost package directory holding path, or None."""
-    owners = [pkg for pkg in packages if pkg == "." or path.startswith(pkg + "/")]
+    owners = [pkg for pkg in packages if is_under(path, pkg)]
     return max(owners, key=len) if owners else None
 
 
@@ -186,27 +206,35 @@ def package_of(path, packages):
 
 def run_lizard(root, sources, tmp):
     files = [path for path in sources if Path(path).suffix in LIZARD_EXTENSIONS]
-    result = {"version": VERSIONS["lizard"], "options": ["--xml", "--ignore_warnings -1"], "analyzed_files": 0}
+    options = ["--xml", "-i", "-1", "-t", str(os.cpu_count() or 1)]
     unread = len(sources) - len(files)
-    result["skipped"] = f"{unread} source files in languages lizard does not read" if unread else None
+    result = {"version": VERSIONS["lizard"], "options": " ".join(options), "analyzed_files": 0,
+              "skipped": f"{unread} source files in languages lizard does not read" if unread else None}
     if not files:
         result["skipped"] = "no files in a language lizard reads"
         return result, None
+    real_root = root.resolve()
     file_list = Path(tmp) / "lizard-files.txt"
-    file_list.write_text("\n".join(files) + "\n")
-    proc = run(["uvx", "--from", f"lizard=={VERSIONS['lizard']}", "lizard", "--xml", "-i", "-1",
-                "-t", os.cpu_count() or 1, "-f", file_list], root)
+    file_list.write_text("".join(f"{real_root / path}\n" for path in files))
+    # Run from the temp directory so a project's uv configuration does not apply.
+    proc = run(["uvx", "--from", f"lizard=={VERSIONS['lizard']}", "lizard", *options, "-f", file_list], tmp)
     if proc.returncode != 0:
         result["skipped"] = f"lizard failed: {failure(proc)}"
         return result, None
-    measures = {m.get("type"): m for m in ET.fromstring(proc.stdout).iter("measure")}
-    functions = []
-    for item in measures["Function"].iter("item"):
-        name, location = item.get("name").rsplit(" at ", 1)
-        path, line = location.rsplit(":", 1)
-        _, nloc, ccn = (int(v.text) for v in item.iter("value"))
-        functions.append({"path": path, "line": int(line), "name": name.replace("(...)", ""), "nloc": nloc, "ccn": ccn})
-    file_ccn = {item.get("name"): int(list(item.iter("value"))[2].text) for item in measures["File"].iter("item")}
+    try:
+        measures = {m.get("type"): m for m in ET.fromstring(proc.stdout).iter("measure")}
+        functions = []
+        for item in measures["Function"].iter("item"):
+            name, location = item.get("name").rsplit(" at ", 1)
+            path, line = location.rsplit(":", 1)
+            _, nloc, ccn = (int(v.text) for v in item.iter("value"))
+            functions.append({"path": os.path.relpath(path, real_root), "line": int(line),
+                              "name": name.replace("(...)", ""), "nloc": nloc, "ccn": ccn})
+        file_ccn = {os.path.relpath(item.get("name"), real_root): int(list(item.iter("value"))[2].text)
+                    for item in measures["File"].iter("item")}
+    except (ET.ParseError, KeyError, ValueError, IndexError, AttributeError) as error:
+        result["skipped"] = f"could not parse lizard's XML: {error}"
+        return result, None
     result["analyzed_files"] = len(file_ccn)
     return result, {"functions": functions, "file_ccn": file_ccn}
 
@@ -224,50 +252,60 @@ def complexity_metrics(lizard):
 # --- duplication: jscpd ----------------------------------------------------
 
 def run_jscpd(root, sources, tmp):
-    result = {"version": VERSIONS["jscpd"], "analyzed_files": 0, "skipped": None}
+    result = {"version": VERSIONS["jscpd"], "options": None, "analyzed_files": 0, "skipped": None}
     empty = ({"duplicated_lines": None, "duplicated_lines_pct": None, "clones": None}, None)
     if not sources:
         result["skipped"] = "no source files"
         return result, *empty
-    # A config of our own keeps a project .jscpd.json from changing the measurement.
-    config = Path(tmp) / "jscpd.json"
-    config.write_text("{}")
-    out_dir = Path(tmp) / "jscpd"
+    real_root = root.resolve()
     max_size = max((root / path).stat().st_size for path in sources) + 1
-    result["options"] = ["--config {}", f"--max-size {max_size}", "--reporters json", "--absolute"]
-    proc = run(["npx", "-y", f"jscpd@{VERSIONS['jscpd']}", "--config", config, "--max-size", max_size,
-                "--reporters", "json", "--output", out_dir, "--absolute", "--silent", *sources], root)
+    options = ["--max-size", str(max_size), "--reporters", "json", "--absolute", "--silent"]
+    result["options"] = " ".join(options)
+    # The paths go in a config file of our own: no argument-length limit, and no project .jscpd.json.
+    config = Path(tmp) / "jscpd.json"
+    config.write_text(json.dumps({"path": [str(real_root / path) for path in sources]}))
+    out_dir = Path(tmp) / "jscpd"
+    # Run from the temp directory so a project .npmrc cannot redirect the registry.
+    proc = run(["npx", "-y", f"jscpd@{VERSIONS['jscpd']}", "--config", config, "--output", out_dir, *options], tmp)
     report = out_dir / "jscpd-report.json"
     if proc.returncode != 0 or not report.is_file():
         result["skipped"] = f"jscpd failed: {failure(proc)}"
         return result, *empty
-    data = json.loads(report.read_text())
-    total = data["statistics"]["total"]
-    result["analyzed_files"] = total["sources"]
-    missed = len(sources) - total["sources"]
-    if missed:
-        result["skipped"] = f"{missed} files below jscpd's minimum token count or in a format it does not read"
-    real_root = root.resolve()
-
-    def location(side):
-        return f"{os.path.relpath(side['name'], real_root)}:{side['start']}-{side['end']}"
-
-    clones = sorted(({"lines": c["lines"], "first": location(c["firstFile"]), "second": location(c["secondFile"])}
-                     for c in data["duplicates"]), key=lambda c: (-c["lines"], c["first"], c["second"]))
-    metrics = {"duplicated_lines": total["duplicatedLines"],
-               "duplicated_lines_pct": round(total["percentage"], 2), "clones": total["clones"]}
+    try:
+        data = json.loads(report.read_text())
+        total = data["statistics"]["total"]
+        metrics = {"duplicated_lines": int(total["duplicatedLines"]),
+                   "duplicated_lines_pct": round(float(total["percentage"]), 2), "clones": int(total["clones"])}
+        analyzed = int(total["sources"])
+        clones = [{"lines": c["lines"], "first": clone_location(c["firstFile"], real_root),
+                   "second": clone_location(c["secondFile"], real_root)} for c in data["duplicates"]]
+    except (ValueError, KeyError, TypeError) as error:
+        result["skipped"] = f"could not parse jscpd's JSON report: {error}"
+        return result, *empty
+    result["analyzed_files"] = analyzed
+    if analyzed == 0:
+        result["skipped"] = "jscpd analyzed no files: all below its minimum token count or in formats it does not read"
+        return result, *empty
+    if analyzed < len(sources):
+        result["skipped"] = (f"{len(sources) - analyzed} files below jscpd's minimum token count"
+                             " or in a format it does not read")
+    clones.sort(key=lambda c: (-c["lines"], c["first"], c["second"]))
     return result, metrics, clones[:TOP_CLONES]
+
+
+def clone_location(side, real_root):
+    return f"{os.path.relpath(side['name'], real_root)}:{side['start']}-{side['end']}"
 
 
 # --- cycles: madge, per package --------------------------------------------
 
-MADGE_EXTENSIONS = ",".join(sorted(e.lstrip(".") for e in JS_EXTENSIONS))
+MADGE_OPTIONS = ["--circular", "--warning", "--no-spinner", "--no-color", "--basedir", ".",
+                 "--extensions", ",".join(sorted(e.lstrip(".") for e in JS_EXTENSIONS))]
 
 
 def madge_cycles(pkg_dir, files, tsconfig):
     """Run madge over files (relative to pkg_dir). Returns (cycles, unresolved imports) or raises RuntimeError."""
-    cmd = ["npx", "-y", f"madge@{VERSIONS['madge']}", "--circular", "--warning", "--no-spinner", "--no-color",
-           "--basedir", ".", "--extensions", MADGE_EXTENSIONS]
+    cmd = ["npx", "-y", f"madge@{VERSIONS['madge']}", *MADGE_OPTIONS]
     if tsconfig:
         cmd += ["--ts-config", tsconfig]
     proc = run(cmd + files, pkg_dir)
@@ -309,6 +347,37 @@ def run_madge(root, pkg, files):
 
 # --- dead code: knip, per package ------------------------------------------
 
+KNIP_OPTIONS = ["--reporter", "json", "--no-progress", "--debug"]
+KNIP_COUNTS = ("unused_files", "unused_exports", "unused_dependencies")
+
+
+def knip_owners(root, packages):
+    """The package knip runs in for each package: a workspace root covers its workspaces, and a
+    directory without a package.json is covered by the nearest enclosing package that has one."""
+    has_manifest = {pkg: (root / pkg / "package.json").is_file() for pkg in packages}
+    owner = {pkg: pkg for pkg in packages}
+    for pkg in packages:
+        enclosing = [p for p in packages if p != pkg and is_under(pkg, p) and has_manifest[p]]
+        if not has_manifest[pkg] and enclosing:
+            owner[pkg] = max(enclosing, key=len)
+    for parent in (p for p in packages if has_manifest[p]):
+        try:
+            workspaces = json.loads((root / parent / "package.json").read_text()).get("workspaces") or []
+        except (ValueError, AttributeError):
+            continue
+        if isinstance(workspaces, dict):
+            workspaces = workspaces.get("packages") or []
+        for pkg in packages:
+            relative = pkg if parent == "." else pkg[len(parent) + 1:]
+            if pkg != parent and is_under(pkg, parent) and any(
+                    fnmatch.fnmatch(relative, str(pattern).removeprefix("./").rstrip("/")) for pattern in workspaces):
+                owner[pkg] = parent
+    for pkg in packages:
+        while owner[owner[pkg]] != owner[pkg]:
+            owner[pkg] = owner[owner[pkg]]
+    return owner
+
+
 def knip_project_paths(debug_output):
     """Absolute paths knip listed under 'Finding project paths' in its --debug output."""
     paths, inside = set(), False
@@ -320,33 +389,61 @@ def knip_project_paths(debug_output):
     return paths
 
 
-def run_knip(root, pkg, files):
-    empty = {"unused_files": None, "unused_exports": None, "unused_dependencies": None}
+def run_knip(root, pkg):
+    """Returns the package's knip entry and knip's project files (repo-relative), or None when unknown."""
+    empty = dict.fromkeys(KNIP_COUNTS)
     pkg_dir = root / pkg
     if not (pkg_dir / "package.json").is_file():
-        return {"analyzed_files": 0, "skipped": "no package.json", **empty}
+        return {"analyzed_files": 0, "skipped": "no package.json", **empty}, None
     if not (pkg_dir / "node_modules").is_dir():
         return {"analyzed_files": 0, "skipped": "no node_modules; knip needs the package's dependencies installed",
-                **empty}
-    proc = run(["npx", "-y", f"knip@{VERSIONS['knip']}", "--reporter", "json", "--no-progress", "--debug"], pkg_dir)
+                **empty}, None
+    # knip loads, and so executes, the project's own configuration (knip.config.ts, plugin configs
+    # such as playwright.config), which is why it runs in the package and only on request.
+    proc = run(["npx", "-y", f"knip@{VERSIONS['knip']}", *KNIP_OPTIONS], pkg_dir)
     report = next((line for line in proc.stdout.splitlines() if line.startswith('{"issues"')), None)
     if proc.returncode not in (0, 1) or report is None:
-        return {"analyzed_files": 0, "skipped": f"knip failed: {failure(proc)}", **empty}
-    real_pkg = pkg_dir.resolve()
-    project = {os.path.relpath(Path(p).resolve(), real_pkg) for p in knip_project_paths(proc.stdout)}
-    mine = {os.path.relpath(path, pkg) for path in files if Path(path).suffix in JS_EXTENSIONS}
-    analyzed = len(mine & project)
+        return {"analyzed_files": 0, "skipped": f"knip failed: {failure(proc)}", **empty}, None
     counts = Counter()
-    for issue in json.loads(report)["issues"]:
-        counts["unused_files"] += len(issue.get("files", []))
-        counts["unused_exports"] += len(issue.get("exports", [])) + len(issue.get("types", []))
-        counts["unused_dependencies"] += sum(len(issue.get(k, [])) for k in
-                                             ("dependencies", "devDependencies", "optionalPeerDependencies"))
-    return {
-        "analyzed_files": analyzed,
-        "skipped": f"{len(mine) - analyzed} of {len(mine)} TS/JS files outside knip's project" if analyzed < len(mine) else None,
-        **{key: counts[key] for key in empty},
-    }
+    try:
+        for issue in json.loads(report)["issues"]:
+            counts["unused_files"] += len(issue.get("files", []))
+            counts["unused_exports"] += len(issue.get("exports", [])) + len(issue.get("types", []))
+            counts["unused_dependencies"] += sum(len(issue.get(k, [])) for k in
+                                                 ("dependencies", "devDependencies", "optionalPeerDependencies"))
+    except (ValueError, KeyError, TypeError, AttributeError) as error:
+        return {"analyzed_files": 0, "skipped": f"could not parse knip's JSON report: {error}", **empty}, None
+    real_root = root.resolve()
+    project = {os.path.relpath(Path(p).resolve(), real_root) for p in knip_project_paths(proc.stdout)}
+    return {key: counts[key] for key in KNIP_COUNTS}, project or None
+
+
+def knip_coverage(project, files):
+    """How many of a package's TS/JS files knip's project included."""
+    if project is None:
+        return {"analyzed_files": None, "skipped": "could not read knip's file list"}
+    mine = {path for path in files if Path(path).suffix in JS_EXTENSIONS}
+    analyzed = len(mine & project)
+    return {"analyzed_files": analyzed,
+            "skipped": f"{len(mine) - analyzed} of {len(mine)} TS/JS files outside knip's project"
+            if analyzed < len(mine) else None}
+
+
+def knip_by_package(root, packages, owned):
+    owner = knip_owners(root, packages)
+    runs = {pkg: run_knip(root, pkg) for pkg in packages if owner[pkg] == pkg}
+    entries = {}
+    for pkg in packages:
+        entry, project = runs[owner[pkg]]
+        ran = entry["unused_files"] is not None
+        if owner[pkg] == pkg:
+            entries[pkg] = {**entry, **knip_coverage(project, owned[pkg])} if ran else entry
+        elif ran:
+            entries[pkg] = {"covered_by": owner[pkg], **knip_coverage(project, owned[pkg])}
+        else:
+            entries[pkg] = {"covered_by": owner[pkg], "analyzed_files": 0,
+                            "skipped": f"knip in {owner[pkg]}: {entry['skipped']}"}
+    return entries
 
 
 # --- lexical counts --------------------------------------------------------
@@ -394,6 +491,7 @@ def lexical_metrics(root, sources):
     lines = test_lines = 0
     suppressions = {name: 0 for name in SUPPRESSIONS}
     catches, skipped, without_assertions = [], [], []
+    analyzed = 0
     for path in sources:
         text = read(root, path)
         count = line_count(text)
@@ -403,6 +501,7 @@ def lexical_metrics(root, sources):
         language = lang(path)
         if language is None:
             continue
+        analyzed += 1
         for name, (extensions, pattern) in SUPPRESSIONS.items():
             if Path(path).suffix in extensions:
                 suppressions[name] += len(pattern.findall(text))
@@ -413,14 +512,21 @@ def lexical_metrics(root, sources):
             skipped += [f"{path}:{line_of(text, m.start())}" for m in SKIPPED_TEST[language].finditer(text)]
             if TEST_CASE[language].search(text) and not ASSERTION[language].search(text):
                 without_assertions.append(path)
-    metrics = {
-        "files": len(sources), "lines": lines, "test_lines": test_lines, "suppressions": suppressions,
-        "empty_catch_candidates": len(catches), "skipped_tests": len(skipped),
-        "test_files_without_assertions": len(without_assertions),
-    }
+    other = len(sources) - analyzed
+    result = {"analyzed_files": analyzed,
+              "skipped": f"{other} source files not in TypeScript, JavaScript or Python" if other else None}
+    metrics = {"files": len(sources), "lines": lines, "test_lines": test_lines}
+    if not analyzed:
+        result["skipped"] = "no TypeScript, JavaScript or Python files"
+        metrics.update(dict.fromkeys(("suppressions", "empty_catch_candidates", "skipped_tests",
+                                      "test_files_without_assertions")))
+        return result, metrics, dict.fromkeys(("empty_catch_candidates", "skipped_tests",
+                                               "test_files_without_assertions"))
+    metrics.update({"suppressions": suppressions, "empty_catch_candidates": len(catches),
+                    "skipped_tests": len(skipped), "test_files_without_assertions": len(without_assertions)})
     details = {"empty_catch_candidates": catches, "skipped_tests": skipped,
                "test_files_without_assertions": without_assertions}
-    return metrics, details
+    return result, metrics, details
 
 
 # --- churn -----------------------------------------------------------------
@@ -428,7 +534,10 @@ def lexical_metrics(root, sources):
 def churn(root, commit, commit_date, generated):
     """Commits in the CHURN_DAYS before the commit's own date, along its ancestry."""
     since = (commit_date - timedelta(days=CHURN_DAYS)).isoformat()
-    log = git(root, "log", commit, "--no-merges", f"--since={since}", "--format=%x00%H", "--name-only", "--no-renames")
+    # --since stops walking at the first older commit; --since-as-filter checks every one.
+    since_flag = "--since-as-filter" if git_has_since_as_filter() else "--since"
+    log = git(root, "log", commit, "--no-merges", f"{since_flag}={since}", f"--until={commit_date.isoformat()}",
+              "--format=%x00%H", "--name-only", "--no-renames")
     per_commit, commits_per_file = [], Counter()
     for chunk in log.split("\0")[1:]:
         paths = [p for p in chunk.splitlines()[1:]
@@ -440,8 +549,9 @@ def churn(root, commit, commit_date, generated):
 
 
 def hotspots(commits_per_file, file_ccn):
+    """Production files ranked by commits in the window times summed cyclomatic complexity."""
     scored = [{"path": path, "commits": commits, "ccn": file_ccn[path], "score": commits * file_ccn[path]}
-              for path, commits in commits_per_file.items() if file_ccn.get(path)]
+              for path, commits in commits_per_file.items() if file_ccn.get(path) and not is_test_path(path)]
     return sorted(scored, key=lambda h: (-h["score"], h["path"]))[:TOP_HOTSPOTS]
 
 
@@ -453,14 +563,15 @@ def snapshot(root, kind, with_packages):
     files = list_files(root)
     sources, generated = split_sources(root, files)
     snap = {
-        "kind": kind, "commit": commit, "dirty": bool(git(root, "status", "--porcelain").strip()),
-        "date": commit_date.isoformat(), "source_files": len(sources), "generated_files": len(generated),
+        "kind": kind, "metrics_version": METRICS_VERSION, "commit": commit,
+        "dirty": bool(git(root, "status", "--porcelain").strip()), "date": commit_date.isoformat(),
+        "source_files": len(sources), "generated_files": len(generated),
     }
     with tempfile.TemporaryDirectory() as tmp:
         lizard_result, lizard = run_lizard(root, sources, tmp)
         jscpd_result, duplication, clones = run_jscpd(root, sources, tmp)
     complexity, complexity_details = complexity_metrics(lizard)
-    lexical, lexical_details = lexical_metrics(root, sources)
+    lexical_result, lexical, lexical_details = lexical_metrics(root, sources)
     per_commit, commits_per_file = churn(root, commit, commit_date, set(generated))
     metrics = {**lexical, **complexity, **duplication,
                "files_per_commit_p50": percentile(per_commit, 0.5),
@@ -468,28 +579,43 @@ def snapshot(root, kind, with_packages):
     details = {**complexity_details, "clones": clones,
                "hotspots": hotspots(commits_per_file, lizard["file_ccn"]) if lizard else None,
                **lexical_details}
-    snap["tools"] = {"lizard": lizard_result, "jscpd": jscpd_result}
+    snap["tools"] = {"lizard": lizard_result, "jscpd": jscpd_result, "lexical": lexical_result}
     if with_packages:
-        snap["tools"]["madge"] = {"version": VERSIONS["madge"],
-                                  "options": ["--extensions " + MADGE_EXTENSIONS, "--ts-config tsconfig.json when the package has one", "--basedir ."]}
-        snap["tools"]["knip"] = {"version": VERSIONS["knip"], "options": ["--reporter json", "--debug"]}
-        snap["packages"] = []
-        packages = find_packages(files)
-        owned = {pkg: [] for pkg in packages}
-        for path in sources:
-            if (pkg := package_of(path, packages)) is not None:
-                owned[pkg].append(path)
-        for pkg in packages:
-            snap["packages"].append({"path": pkg, "source_files": len(owned[pkg]),
-                                     "madge": run_madge(root, pkg, owned[pkg]),
-                                     "knip": run_knip(root, pkg, owned[pkg])})
-        metrics["cycles"] = sum_or_none(len(p["madge"]["cycles"]) if p["madge"]["cycles"] is not None else None
-                                        for p in snap["packages"])
-        for key in ("unused_files", "unused_exports", "unused_dependencies"):
-            metrics[key] = sum_or_none(p["knip"][key] for p in snap["packages"])
+        package_metrics(root, files, sources, snap, metrics)
     snap["metrics"] = metrics
     snap["details"] = details
     return snap
+
+
+def package_metrics(root, files, sources, snap, metrics):
+    """Run madge and knip per package; fill snap['packages'], their tools entries, and their metrics."""
+    packages = find_packages(files)
+    owned = {pkg: [] for pkg in packages}
+    outside = 0
+    for path in sources:
+        if (pkg := package_of(path, packages)) is None:
+            outside += 1
+        else:
+            owned[pkg].append(path)
+    knip = knip_by_package(root, packages, owned)
+    snap["packages"] = [{"path": pkg, "source_files": len(owned[pkg]), "madge": run_madge(root, pkg, owned[pkg]),
+                         "knip": knip[pkg]} for pkg in packages]
+    for tool, options in (("madge", MADGE_OPTIONS + ["--ts-config", "tsconfig.json (when present)"]),
+                          ("knip", KNIP_OPTIONS)):
+        if not packages:
+            reasons = ["no package.json, tsconfig.json or pyproject.toml found, so nothing was measured per package"]
+        else:
+            reasons = [f"{outside} source files outside every package"] if outside else []
+            partial = [p["path"] for p in snap["packages"] if p[tool]["skipped"]]
+            if partial:
+                reasons.append(f"incomplete in {len(partial)} of {len(packages)} packages: {', '.join(partial)}")
+        snap["tools"][tool] = {"version": VERSIONS[tool], "options": " ".join(options),
+                               "analyzed_files": sum_or_none(p[tool]["analyzed_files"] for p in snap["packages"]),
+                               "skipped": "; ".join(reasons) or None}
+    metrics["cycles"] = sum_or_none(len(p["madge"]["cycles"]) if p["madge"]["cycles"] is not None else None
+                                    for p in snap["packages"])
+    for key in KNIP_COUNTS:
+        metrics[key] = sum_or_none(p["knip"].get(key) for p in snap["packages"])
 
 
 def sum_or_none(values):
@@ -514,6 +640,14 @@ def flatten(metrics, prefix=""):
     return flat
 
 
+def producer(snap, name):
+    """Who produced a metric and at which version: the tool, or this script's METRICS_VERSION."""
+    tool = METRIC_TOOL.get(name.split(".")[0])
+    if tool:
+        return tool, snap.get("tools", {}).get(tool, {}).get("version")
+    return "metrics_version", snap.get("metrics_version")
+
+
 def compare(history):
     lines = [line for line in Path(history).read_text(encoding="utf-8").splitlines() if line.strip()]
     if len(lines) < 2:
@@ -522,14 +656,13 @@ def compare(history):
     before, after = flatten(earlier["metrics"]), flatten(later["metrics"])
     changes, not_comparable = {}, []
     for name in sorted(set(before) | set(after)):
-        tool = METRIC_TOOL.get(name.split(".")[0])
-        versions = [snap.get("tools", {}).get(tool, {}).get("version") for snap in (earlier, later)] if tool else []
+        (tool, version_before), (_, version_after) = producer(earlier, name), producer(later, name)
         if name not in before or name not in after:
             reason = f"missing from the {'earlier' if name not in before else 'later'} snapshot"
         elif before[name] is None or after[name] is None:
             reason = f"null in the {'earlier' if before[name] is None else 'later'} snapshot"
-        elif tool and versions[0] != versions[1]:
-            reason = f"{tool} {versions[0]} then {versions[1]}"
+        elif version_before != version_after:
+            reason = f"{tool} {version_before} then {version_after}"
         else:
             change = after[name] - before[name]
             changes[name] = {"before": before[name], "after": after[name], "change": round(change, 4),
@@ -545,8 +678,11 @@ def compare(history):
 def backfill(root, days, points, history):
     head_date = datetime.fromisoformat(git(root, "show", "-s", "--format=%cI", "HEAD").strip())
     first_date = datetime.fromisoformat(git(root, "log", "--first-parent", "--reverse", "--format=%cI").split()[0])
-    # A repository younger than DAYS spreads its points over the history it has.
-    span = min(timedelta(days=days), head_date - first_date)
+    span = timedelta(days=days)
+    if head_date - first_date < span:
+        # A repository younger than DAYS spreads its points over its own history,
+        # the first one step after the root commit rather than on it.
+        span = (head_date - first_date) * points / (points + 1)
     commits = []
     for index in range(points):
         target = head_date - span * (points - index) / points
@@ -555,13 +691,14 @@ def backfill(root, days, points, history):
             print(f"no commit on or before {target.date()}; that point is left out", file=sys.stderr)
         elif sha not in commits:
             commits.append(sha)
+    window = {"requested_days": days, "span_days": round(span.total_seconds() / 86400, 2)}
     snaps = []
     with tempfile.TemporaryDirectory() as tmp:
         for index, sha in enumerate(commits):
             worktree = Path(tmp) / f"history-{index}"
             git(root, "worktree", "add", "--detach", "--quiet", str(worktree), sha)
             try:
-                snaps.append(snapshot(worktree, "history", with_packages=False))
+                snaps.append({**snapshot(worktree, "history", with_packages=False), "backfill": window})
             finally:
                 git(root, "worktree", "remove", "--force", str(worktree))
     for snap in snaps:
@@ -570,13 +707,21 @@ def backfill(root, days, points, history):
     return snaps
 
 
+def positive_int(value):
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
+    return number
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("repo", nargs="?", default=".")
     parser.add_argument("--append", metavar="FILE", help="append the snapshot to FILE as one JSON line")
     parser.add_argument("--compare", metavar="FILE", help="compare FILE's last snapshot with the one before it")
-    parser.add_argument("--backfill", metavar="DAYS", type=int, help="snapshot ancestors of HEAD from the last DAYS days")
-    parser.add_argument("--points", type=int, default=3, help="how many ancestors --backfill measures (default 3)")
+    parser.add_argument("--backfill", metavar="DAYS", type=positive_int,
+                        help="snapshot ancestors of HEAD from the last DAYS days")
+    parser.add_argument("--points", type=positive_int, default=3, help="how many ancestors --backfill measures (default 3)")
     args = parser.parse_args()
     if args.compare:
         print(json.dumps(compare(args.compare), indent=2))

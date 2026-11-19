@@ -51,7 +51,7 @@
       "kind": "duplication",
       "paths": ["pkg-web/src/big-table.ts"],
       "lines": 1228,
-      "note": "normalizeRows and normalizeColumns share a body inside a file over 1,000 lines"
+      "note": "normalizeRows and normalizeColumns share a body inside a 1,228-line file; jscpd 5 has no line limit, so this proves only that a clone inside a large file is found"
     }
   ],
   "controls": [

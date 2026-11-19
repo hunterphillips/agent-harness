@@ -251,15 +251,78 @@ export function writeAudit(path: string, entry: string): void {
 """
 
 
-def clean(version):
-    rounding = "Math.round(value * 100) / 100" if version == 1 else "Math.round((value + Number.EPSILON) * 100) / 100"
-    return f"""export function clamp(value: number, low: number, high: number): number {{
+def clean(revision):
+    # Edited in more commits than pricing.ts, so commit count alone would rank it first.
+    return f"""export const REVISION = {revision};
+
+export function clamp(value: number, low: number, high: number): number {{
   return Math.min(high, Math.max(low, value));
 }}
 
 export function roundCents(value: number): number {{
-  return {rounding};
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }}
+"""
+
+
+# More summed complexity than pricing.ts (CCN 35 over seven functions, none over 15)
+# but committed once, so complexity alone would rank it first.
+VALIDATORS = """export function validSku(sku: string): boolean {
+  if (!sku) return false;
+  if (sku.length > 32) return false;
+  if (sku.startsWith("-")) return false;
+  if (!/^[a-z0-9-]+$/.test(sku)) return false;
+  return true;
+}
+
+export function validQuantity(qty: number): boolean {
+  if (!Number.isInteger(qty)) return false;
+  if (qty <= 0) return false;
+  if (qty > 999) return false;
+  if (Number.isNaN(qty)) return false;
+  return true;
+}
+
+export function validEmail(email: string): boolean {
+  const at = email.indexOf("@");
+  if (at < 1) return false;
+  if (at === email.length - 1) return false;
+  if (email.includes(" ")) return false;
+  if (email.split("@").length !== 2) return false;
+  return true;
+}
+
+export function validPostcode(code: string, region: string): boolean {
+  if (region === "US") return /^\\d{5}$/.test(code);
+  if (region === "UK") return /^[A-Z]{1,2}\\d/.test(code);
+  if (region === "CA") return /^[A-Z]\\d[A-Z]/.test(code);
+  if (region === "EU") return code.length >= 4;
+  return code.length > 0;
+}
+
+export function validCoupon(coupon: string | undefined): boolean {
+  if (coupon === undefined) return true;
+  if (coupon.length < 4) return false;
+  if (coupon !== coupon.toUpperCase()) return false;
+  if (/\\s/.test(coupon)) return false;
+  return true;
+}
+
+export function validWeight(kg: number, fragile: boolean): boolean {
+  if (kg < 0) return false;
+  if (fragile && kg > 30) return false;
+  if (kg > 70) return false;
+  if (!Number.isFinite(kg)) return false;
+  return true;
+}
+
+export function validChannel(channel: string, partnerId?: string): boolean {
+  if (channel === "web") return true;
+  if (channel === "phone") return true;
+  if (channel === "partner") return Boolean(partnerId);
+  if (channel === "store") return partnerId === undefined;
+  return false;
+}
 """
 
 
@@ -338,6 +401,7 @@ COMMITS = [
         "pkg-core/src/invoice.ts": summarize_totals("Totals for an invoice.") + INVOICE_TAIL,
     }),
     ("core: storage", {
+        "pkg-core/src/clean.ts": clean(2),
         "pkg-core/src/storage.ts": STORAGE,
         "pkg-core/src/safe-write.ts": SAFE_WRITE,
     }),
@@ -346,6 +410,7 @@ COMMITS = [
         "pkg-core/test/pricing.test.ts": PRICING_TEST,
     }),
     ("core: cart test and generated schemas", {
+        "pkg-core/src/clean.ts": clean(3),
         "pkg-core/test/cart.test.ts": CART_TEST,
         "pkg-core/src/gen/orders.ts": generated_schema("orders"),
         "pkg-core/src/gen/invoices.ts": generated_schema("invoices"),
@@ -353,8 +418,10 @@ COMMITS = [
     ("web: big table", {
         "pkg-core/src/pricing.ts": pricing(20),
         "pkg-web/src/big-table.ts": big_table(),
+        "pkg-web/src/validators.ts": VALIDATORS,
     }),
     ("core: legacy discount", {
+        "pkg-core/src/clean.ts": clean(4),
         "pkg-core/src/unused.ts": UNUSED,
     }),
     ("web: row count", {
@@ -363,9 +430,10 @@ COMMITS = [
     }),
     ("core: pricing rules and rounding", {
         "pkg-core/src/pricing.ts": pricing(24),
-        "pkg-core/src/clean.ts": clean(2),
+        "pkg-core/src/clean.ts": clean(5),
     }),
     ("readme", {
+        "pkg-core/src/clean.ts": clean(6),
         "README.md": README,
     }),
 ]

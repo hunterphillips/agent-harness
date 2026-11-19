@@ -63,6 +63,7 @@ Match process weight to stakes: the delivery workflows exist for software that p
 - triage/ — (none; reads to-issues/tracker-conventions.md for the label vocabulary)
 - implement-issue/ — (none; the controller reads ../tdd/tdd.md and ../requesting-code-review/code-reviewer.md itself)
 - ui-design/ — [references/quick-reference.md](ui-design/references/quick-reference.md), [references/pro-rules.md](ui-design/references/pro-rules.md); `scripts/search.py` + `data/*.csv` queried via Bash, not read into context
+- architecture-audit/ — `metrics.py`, run via Bash by its absolute path, not read into context
 - architecture-improvement/ — [LANGUAGE.md](architecture-improvement/LANGUAGE.md), [DEEPENING.md](architecture-improvement/DEEPENING.md), [INTERFACE-DESIGN.md](architecture-improvement/INTERFACE-DESIGN.md), [HTML-REPORT.md](architecture-improvement/HTML-REPORT.md)
 
 Cross-references between workflow folders use relative paths (e.g. `create-plan/plan-template.md` from this router) and resolve within this skill directory.

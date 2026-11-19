@@ -1,192 +1,102 @@
 # Architecture Audit
 
-Systematic codebase audit. Run against `$ARGUMENTS` (defaults to current project root).
+Find the structural problems in a project whose owner does not read its code. Agent-written code erodes through duplication, rising complexity, swallowed errors, weak tests and import cycles, and this audit is how that gets noticed. `metrics.py` measures; you read what the measurements point at and judge. The audit covers the project root unless the user names a directory.
 
-## Mindset
+A finding names a file, the evidence (a number, command output, or the code itself), and what goes wrong because of it. Anything short of that is not reported. A healthy codebase gets a short report.
 
-**You are an experienced staff engineer doing a genuine review, not a report generator.**
+## Measure
 
-- Only flag things that would actually matter to a working engineer on this project.
-- A finding without concrete evidence (file paths, import chains, line counts, command output) is not a finding. Drop it.
-- If the codebase is well-structured, say so and stop; the review's length follows the findings, not the template.
-- Do not manufacture concerns to fill sections. Empty severity categories are fine — omit them entirely.
-- Do not recommend restructuring unless the current structure is causing real, demonstrable problems.
-- Do not flag things just because they deviate from some platonic ideal. Consistency within the project matters more than matching a textbook pattern.
-- Prefer 3 high-signal findings over 15 padded ones.
+`metrics.py` sits in the same directory as this file. Run it with `python3` by its absolute path, built from the path you read this file from, because a skill-relative path does not resolve from the project. Run it from the project root. It needs git, `uvx` and `npx`, runs pinned tool versions, and writes nothing into the project. Do not install tools or dependencies to fill a gap the script reports: the audit leaves the project as it found it, and a skipped tool is reported as skipped.
 
-## Process
+With a `thoughts/shared/` directory, the history lives in `thoughts/shared/audits/metrics.jsonl`:
 
-1. **Discovery** — Map the codebase before forming opinions
-2. **Analysis** — Identify concrete issues with evidence
-3. **Planning** — Prioritize fixes, propose target structure (only if warranted)
-4. **Output** — Deliver structured report
+1. If the history file does not exist, create `thoughts/shared/audits/` and run `metrics.py --backfill 90 --append thoughts/shared/audits/metrics.jsonl`. It measures three past commits, so the first audit has something to compare with.
+2. Run `metrics.py --append thoughts/shared/audits/metrics.jsonl` for this audit's snapshot.
+3. Run `metrics.py --compare thoughts/shared/audits/metrics.jsonl` for the change since the previous snapshot.
 
-## 1. Discovery
+Without `thoughts/shared/`, run `metrics.py` alone, give the report in your reply instead of a file, and say it has no comparison.
 
-Use subagents to build a picture of the project efficiently.
+Reading the snapshot:
 
-### Map the structure
+- `metrics` holds the counts and `details` the locations behind them. The candidate lists (`empty_catch_candidates`, `skipped_tests`, `test_files_without_assertions`, `hotspots`, `clones`) are places to read, not findings: they come from lexical matches and rankings, and only the code says whether a match is a defect.
+- `hotspots` ranks production files by commits in the 90 days before the snapshot times summed cyclomatic complexity.
+- A null metric was not measured, which is different from zero. Report it as not measured, with the tool's `skipped` reason in the coverage part of the report.
+- `tools.<tool>.skipped` names partial coverage: files outside every package, packages where a tool failed, and imports madge could not resolve, which means the edges through them are missing and a cycle through them goes unseen.
+- knip runs only in a package whose `node_modules` exists, and its counts include files the script treats as generated. It loads and executes the project's own configuration files, so running the audit runs project code.
+- On a repository younger than 90 days, backfill compresses its points into the repository's history; `backfill.span_days` is the real span, and the change column may cover days rather than months.
+- History snapshots carry no cycle or unused-code fields, and a metric is not comparable across a change of tool version or `metrics_version`. `--compare` lists these under `not_comparable`; the report says the metric is not comparable instead of reporting a change.
 
-Use `codebase-locator` to get a full map of the project layout, entry points, and file organization. Ask it to locate implementation files, test files, configuration, and type definitions for the project root.
+## Investigate
 
-The commands in this file are for a TypeScript repo; for another stack, use its equivalents (import-cycle, dead-code, and unused-dependency checkers) and note which you ran.
+Read in order of churn. Start with the hotspots, then the clones, the catch and test candidates, and the cycles, and read the code before calling any of them a finding.
 
-### Check for circular dependencies and coupling hotspots
+Then read past the numbers: the entry points, and anything `CONTEXT.md` or `docs/adr/` says the code must do. The metrics miss problems no tool counts, such as a module nothing reaches or a data flow that contradicts a recorded decision. Use `codebase-analyzer` when a data flow needs tracing.
 
-```bash
-# Circular dependencies (install if needed: npm i -D madge)
-npx madge --circular --extensions ts,tsx src/
+Code that contradicts an ADR is a finding. A finding whose fix would reverse an ADR says so, so the owner decides with the decision in view.
 
-# Most-imported files (coupling hotspots)
-grep -r "from ['\"]" src/ --include='*.ts' --include='*.tsx' | \
-  sed "s/.*from ['\"]//;s/['\"].*//" | sort | uniq -c | sort -rn | head -20
-```
+## Test probe
 
-### Check for dead code
+A probe checks whether a hotspot's tests notice a broken behaviour. Run it only on a clean working tree, so restoring the file cannot discard anyone's work, and on at most three hotspots that have tests:
 
-```bash
-# Unused exports and files (install if needed: npm i -D knip)
-npx knip --include files,exports,dependencies 2>/dev/null
+1. Run the module's tests. Continue only if they pass.
+2. Change one line so that behaviour the module's callers rely on is different.
+3. Run the same command. Record the mutation, the command, and both results.
+4. Restore the file with `git checkout -- <file>`.
 
-# Fallback
-npx ts-prune 2>/dev/null
+Tests that still pass mark a place where coverage may be missing; report it with the mutation shown. A probe that could not run is reported as not run, with the reason: no clean tree, no runnable tests, or a failing baseline.
 
-# Unused dependencies
-npx depcheck 2>/dev/null
-```
+## Severity
 
-### Size hotspots
+Severity follows consequence and reach. Metrics and churn decide what gets read first; they do not set severity.
 
-```bash
-find src -name '*.ts' -o -name '*.tsx' | xargs wc -l | sort -rn | head -20
-```
+| Severity | Criteria |
+| --- | --- |
+| Critical | Wrong behaviour now, or an error swallowed where data is written or identity is checked |
+| High | A defect or design problem on a path many features pass through, or one that has already forced repeated changes |
+| Medium | A real problem confined to one area; a surviving test probe on a hotspot |
+| Low | A real problem in code that rarely changes and few things depend on |
 
-### Understand how things connect
+## Report
 
-For any areas that look potentially problematic from the discovery above (high coupling, large files, circular deps), use `codebase-analyzer` to trace the actual data flow and understand how components interact. Don't analyze things that look fine.
-
-### Check for pattern consistency
-
-If the codebase appears to use multiple conflicting approaches for the same thing (e.g., two different API patterns, mixed naming conventions), use `codebase-pattern-finder` to find concrete examples and understand the scope of the inconsistency. Only do this if discovery surfaced actual signals — don't go hunting for inconsistencies.
-
-## 2. Analysis
-
-Evaluate discovery findings. **Only flag items where you have concrete evidence** — file paths, import chains, line counts, command output. If you can't point to it in the code, it's not a finding.
-
-### What to look for
-
-- Circular dependencies (from madge output — these are always worth flagging)
-- God modules that everything imports (from coupling hotspot analysis)
-- Files that are unreasonably large and doing too many things
-- Dead code (unused files, exports, dependencies from knip/depcheck)
-- Inconsistent patterns that create confusion (only if genuinely inconsistent, not just "different from what I'd choose")
-- Layer violations where they'd cause real problems (e.g., UI directly hitting the database)
-- Configuration scattered across many files with no central source of truth
-
-### What NOT to flag
-
-- Stylistic preferences that don't affect maintainability
-- Patterns that are internally consistent even if unconventional
-- Small files or directories that aren't hurting anything
-- Absence of patterns the project doesn't need yet
-- Things that are "technically" an anti-pattern but aren't causing problems here
-
-### Severity
-
-| Severity     | Criteria                                                         |
-| ------------ | ---------------------------------------------------------------- |
-| **Critical** | Actively causing bugs or blocking development                    |
-| **High**     | Significant maintenance burden — engineers are feeling this pain |
-| **Medium**   | Slows development noticeably, worth addressing when nearby       |
-| **Low**      | Minor friction, fix opportunistically                            |
-
-If nothing reaches a severity level, omit that level. Don't stretch findings to fill categories.
-
-## 3. Planning
-
-### Should you even recommend restructuring?
-
-**Yes, if** there are concrete symptoms: developers can't find code, simple changes touch many files, circular deps are endemic, tests are hard to write because of coupling, new features require copying boilerplate.
-
-**No, if** the motivation is aesthetic, a deadline is approaching, there are no tests to verify the refactoring, or the team hasn't agreed on a target. Say the codebase is in reasonable shape and move on.
-
-### If restructuring is warranted
-
-Keep recommendations grounded in what the project actually is. A 20-file Express API doesn't need DDD. A solo-dev side project doesn't need strict module boundaries.
-
-Migration is always incremental:
-
-1. Create target structure alongside existing
-2. Move one module at a time, update imports after each move
-3. Run tests after every move
-4. Update import aliases (tsconfig paths) to minimize diffs
-5. Delete old locations only after verification
-
-```bash
-# Verify no broken imports after moves
-npx tsc --noEmit
-```
-
-## 4. Output
+Write the report to `thoughts/shared/audits/YYYY-MM-DD-audit.md`. Omit any section with nothing in it.
 
 ```markdown
-# Architecture Review: [Project Name]
+# Architecture audit: <project>, YYYY-MM-DD
 
-## Overview
+<Overall health in one line.>
 
-- **Type:** [Web App / API / Library / Monorepo]
-- **Stack:** [languages, frameworks, key dependencies]
-- **Size:** ~X files, ~Y lines
-- **Current structure:** [Feature-based / Layer-based / Mixed / Ad-hoc]
-- **Overall health:** [Healthy / Some concerns / Needs attention]
+## Metrics
+
+| Metric | Value | Change since <previous snapshot date> |
+| --- | --- | --- |
+| functions_over_ccn_15 | 4 | +1 |
+| unused_files | not measured | not comparable: knip did not run |
+
+## Coverage
+
+- <tool>: <files analyzed>; skipped: <reason from the snapshot>
 
 ## Findings
 
-[Only include severity levels that have findings. Omit empty levels.]
-
 ### Critical
 
-1. **[Issue]** — [Evidence]. Recommendation: [specific fix].
+1. `<path>:<line>`: <evidence>. <What goes wrong because of it.>
 
 ### High
 
-1. ...
+### Medium
 
-## Dead Code
+### Low
 
-[Only include if knip/depcheck/ts-prune found meaningful results]
+## Test probes
 
-- **Unused files:** [list]
-- **Unused exports:** [count and notable examples]
-- **Unused dependencies:** [list]
+- `<path>`: <mutation>; `<command>`; before: <result>; after: <result>.
 
 ## Recommendations
 
-[Only include timeframes that have items. Omit empty ones.]
-
-### Immediate
-
-- [ ] [Action]
-
-### Short-term
-
-- [ ] [Action]
-
-### Longer-term
-
-- [ ] [Action]
-
-## Proposed Structure
-
-[Only include if restructuring is genuinely recommended. Otherwise omit entirely.]
-
-## Migration Steps
-
-[Only include if restructuring is recommended. Each step independently mergeable.]
+- <An action, such as "extract X from Y into Z".>
 ```
 
-### Report rules
+## Restructuring
 
-- Every finding must cite specific files, line counts, or command output.
-- Omit sections with nothing to report.
-- Recommendations must be actionable — "extract X from Y into Z", not "improve separation of concerns."
+Recommend restructuring only for a concrete symptom the findings show, such as simple changes touching many files or a cycle that blocks testing, because a structure that causes no problem is not worth the churn of moving it. Migrate one module at a time, with the tests run after each move.

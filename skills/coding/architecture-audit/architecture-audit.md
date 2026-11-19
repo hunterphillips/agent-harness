@@ -2,7 +2,7 @@
 
 Find the structural problems in a project whose owner does not read its code. Agent-written code erodes through duplication, rising complexity, swallowed errors, weak tests and import cycles, and this audit is how that gets noticed. `metrics.py` measures; you read what the measurements point at and judge. The audit covers the project root unless the user names a directory.
 
-A finding names a file, the evidence (a number, command output, or the code itself), and what goes wrong because of it. Anything short of that is not reported. A healthy codebase gets a short report.
+A finding names the file a fix would change, the evidence (a number, command output, or the code itself), and what goes wrong because of it. Anything short of that is not reported. A healthy codebase gets a short report.
 
 ## Measure
 
@@ -28,7 +28,7 @@ Reading the snapshot:
 
 ## Investigate
 
-Read in order of churn. Start with the hotspots, then the clones, the catch and test candidates, and the cycles, and read the code before calling any of them a finding.
+Read in order of churn. Start with the hotspots, then the clones, the catch and test candidates, and the cycles, and read the code before calling any of them a finding. Files the script counts as generated are outside the audit: it leaves them out of every count because their content belongs to the generator.
 
 Then read past the numbers: the entry points, and anything `CONTEXT.md` or `docs/adr/` says the code must do. The metrics miss problems no tool counts, such as a module nothing reaches or a data flow that contradicts a recorded decision. Use `codebase-analyzer` when a data flow needs tracing.
 

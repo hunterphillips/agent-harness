@@ -2,7 +2,15 @@
 
 This runner compares the final artifacts from the repository configuration and a customization-free control. It uses blind pairwise Codex reviews in both A/B orders. Both arms run with `--setting-sources project`, so they load project settings only and a user-level hook, setting, or output style in `~/.claude` cannot contaminate an A/B result. Coding tasks run deterministic checks before qualitative review.
 
-The configured arm gets the repository's `skills/`, `agents/`, `output-styles/`, and `settings.json` in the workspace's `.claude/`; control runs with `--safe-mode`. Both arms get the CLI's default tool set minus `WebFetch` and `WebSearch`, and the same turn and budget ceilings. The configured arm's prompt starts with `/writing` for writing tasks and `/coding` for coding and UI tasks; control's prompt has no prefix.
+The configured arm gets the repository's `skills/`, `agents/`, `output-styles/`, and `settings.json` in the workspace's `.claude/`; control runs with `--safe-mode`. The configured arm's prompt starts with `/writing` for writing tasks and `/coding` for coding and UI tasks; control's prompt has no prefix. Both arms get the same turn and budget ceilings.
+
+Both arms get the CLI's default tool set with `--disallowedTools` removing web access and every tool that acts on the owner's account or reaches other sessions: `WebFetch`, `WebSearch`, `RemoteTrigger`, `CronCreate`, `CronDelete`, `CronList`, `PushNotification`, `ScheduleWakeup`, `DesignSync`, `Workflow`, `SendMessage`, `ListAgents`, `Monitor`, `EnterWorktree`, and `ExitWorktree`. With CLI 2.1.327 that leaves `Task` (the subagent tool), `Bash`, `Read`, `Edit`, `Write`, `NotebookEdit`, `Skill`, `ToolSearch`, `TaskStop`, and `ReportFindings`. The runs use `--dangerously-skip-permissions`, so these tools act without prompts.
+
+The arms differ in more than skills:
+
+- The configured arm deploys every skill in the repository, and some act on absolute paths outside the workspace, such as a note-capture skill that writes to a vault in the home directory. Nothing sandboxes that.
+- The deployed `settings.json` sets `env.MAX_THINKING_TOKENS`, so only the configured arm runs with that setting.
+- Both arms carry the CLI's bundled skills (`debug`, `verify`, `simplify`, `code-review`, and others) and the Skill tool, so a control record can show a `skill_calls` entry for a bundled skill.
 
 Requires Python 3.12, `git`, an authenticated `claude` CLI, and an authenticated `codex` CLI.
 
@@ -21,15 +29,15 @@ python eval/run.py --battery coding
 python eval/run.py --battery coding --model claude-sonnet-5
 ```
 
-Interrupted runs leave a fsynced journal. Continue one with `python eval/run.py --battery writing --resume YYYYMMDD-HHMMSS` using the original task selection, replicate count, and `--model`. Resume refuses a run whose fingerprint (below) differs from the current one, and names the part that changed: config tree, a task's prompt, fixture, or checks, model, CLI version, tool flags, or ceilings. It also refuses a run started before fingerprints existed, because its arms ran under other tools and prompts.
+Interrupted runs leave a fsynced journal. Continue one with `python eval/run.py --battery writing --resume YYYYMMDD-HHMMSS` using the original task selection, replicate count, and `--model`. Resume refuses a run whose fingerprint (below) differs from the current one, and names the part that changed: config tree, a task's prompt, fixture, or checks, model, CLI version, tool flags, or ceilings. It also refuses a run started before fingerprints existed, because its arms ran under other tools and prompts. A `--rejudge` run copies the model and fingerprint from its source run and resumes without the fingerprint check, because its arms are fixed and only judging resumes.
 
-Results land in `eval/results/<timestamp>.json` and `.md`; `.meta.json` and `.records.jsonl` are recovery/audit files. The directory is gitignored. `.meta.json` holds a fingerprint of the run: hashes of the deployed `.claude/` tree and of each task's prompt, fixture, and checks, plus the model, `claude --version`, tool flags, and ceilings.
+Results land in `eval/results/<timestamp>.json` and `.md`; `.meta.json` and `.records.jsonl` are recovery/audit files. The directory is gitignored. `.meta.json` holds a fingerprint of the run: hashes of the deployed `.claude/` tree and of each task's rendered prompt per arm, fixture, and checks (ignoring `.DS_Store`, `__pycache__`, and `.pyc` files), plus the model, `claude --version`, tool flags, and ceilings.
 
 Each arm runs with `--output-format stream-json`, and its raw events are kept at `eval/results/<run-id>/<task>/<replicate>/<arm>/events.jsonl`. Each arm's journal record lists what it loaded: `slash_command`, `skill_calls` (Skill tool invocations), `skill_files_read` (paths under `.claude/skills/` in Read calls and Bash commands), `subagents` (subagent tool calls), and `tools_available` (from the session's init event). The `.md` summary shows these per arm, with each arm's tool count and the tools offered to one arm but not the other. A slash command expands into the prompt, so `/coding` alone produces no Skill call.
 
 A replicate's verdict needs both judge orders to agree. When both agree there is no winner, the replicate is a `tie`. When a judge result is missing or the two orders disagree, it is `no_verdict`. When a coding gate decides a replicate, judging is skipped, so `correctness_scope` goes to the passing arm and every other dimension is `no_verdict`. A task's verdict is the outcome of more than half its replicates; with no majority, or no completed replicates, it is `no_verdict`.
 
-Coding gates compare the workspace with the fixture commit, which the runner records as `refs/eval/baseline`, so unstaged, staged, committed, and amended work are judged alike.
+Coding gates compare the workspace with the fixture commit, which the runner records as `refs/eval/baseline`, so unstaged, staged, committed, and amended work are judged alike. The judge's patch is taken against the same commit after `git add --intent-to-add`, so new files appear in it whether or not the arm committed them. Coding gates reject any changed file outside the task's expected set, so a `/coding` workflow that writes a planning file fails the configured arm's gate.
 
 Each replicate can make two Claude calls and two Codex judge calls. Coding cases with one passing deterministic gate skip both judge calls. Every arm is capped at 12 turns and $2 per writing run and 40 turns and $6 per coding or UI run (writing tasks that ship a repository get the coding ceilings); these are ceilings, not estimates. A default writing battery plans 60 Claude calls and 60 judge calls, so use a one-replicate, one-task smoke test before a full run. Efficiency metrics are reported separately and never affect quality verdicts.
 

@@ -37,7 +37,27 @@ ARM_NAMES = ("configured", "control")
 POSITIONS = (("configured", "control"), ("control", "configured"))
 # The fixture commit, kept as a ref so an arm amending that commit cannot move it.
 BASELINE_REF = "refs/eval/baseline"
-TOOL_FLAGS = ("--tools", "default", "--disallowedTools", "WebFetch,WebSearch")
+# Withheld from both arms: web access, and every tool that acts on the owner's
+# account or reaches other sessions (schedules, triggers, notifications,
+# messaging, worktrees, workflows, design sync).
+WITHHELD_TOOLS = (
+    "WebFetch",
+    "WebSearch",
+    "RemoteTrigger",
+    "CronCreate",
+    "CronDelete",
+    "CronList",
+    "PushNotification",
+    "ScheduleWakeup",
+    "DesignSync",
+    "Workflow",
+    "SendMessage",
+    "ListAgents",
+    "Monitor",
+    "EnterWorktree",
+    "ExitWorktree",
+)
+TOOL_FLAGS = ("--tools", "default", "--disallowedTools", ",".join(WITHHELD_TOOLS))
 ARM_MODEL = "claude-opus-5"
 JUDGE_MODEL = "gpt-5.6-sol"
 JUDGE_REASONING_EFFORT = "high"
@@ -326,6 +346,8 @@ def changed_paths(workspace: Path) -> list[str]:
 
 
 def collect_code_artifact(workspace: Path, gate: dict[str, Any], *, ui: bool = False) -> str:
+    # Intent-to-add puts new files in the patch whether or not the arm committed them.
+    git(workspace, "add", "--intent-to-add", ".")
     patch = git(workspace, "diff", "--no-ext-diff", "--no-color", BASELINE_REF, "--", ".")
     files = set(git(workspace, "ls-files").splitlines())
     files.update(changed_paths(workspace))
@@ -398,6 +420,8 @@ def bash_skill_paths(command: str, directory: str | None) -> tuple[list[str], st
 
     Agents read workflow files as `cd .claude/skills/coding && cat tdd/tdd.md`,
     so a file argument after a `cd` into a skill directory resolves against it.
+    Two known over-counts after such a `cd`: heredoc body lines are parsed as
+    commands, and a redirect target (`> notes.md`) counts as a read.
     """
     paths: list[str] = []
     for segment in re.split(r"&&|\|\||[;|\n]", command):
@@ -413,7 +437,7 @@ def bash_skill_paths(command: str, directory: str | None) -> tuple[list[str], st
             if match:
                 directory = posixpath.normpath(match.group(0))
             elif directory and target and not target.startswith(("/", "~", "-")):
-                directory = in_skills_tree(posixpath.normpath(posixpath.join(directory, target)))
+                directory = path_if_in_skills_tree(posixpath.normpath(posixpath.join(directory, target)))
             else:
                 directory = None
             continue
@@ -426,12 +450,12 @@ def bash_skill_paths(command: str, directory: str | None) -> tuple[list[str], st
             else:
                 continue
             # Only file arguments count; directories and search patterns do not.
-            if in_skills_tree(path) and path.endswith(SKILL_FILE_EXTENSIONS):
+            if path_if_in_skills_tree(path) and path.endswith(SKILL_FILE_EXTENSIONS):
                 paths.append(path)
     return paths, directory
 
 
-def in_skills_tree(path: str) -> str | None:
+def path_if_in_skills_tree(path: str) -> str | None:
     return path if path == ".claude/skills" or path.startswith(".claude/skills/") else None
 
 
@@ -441,14 +465,15 @@ def summarize_trace(events: list[dict[str, Any]]) -> dict[str, Any]:
     skill_calls: list[str] = []
     skill_files_read: list[str] = []
     subagents = 0
-    # A cd carries between Bash calls within one session; subagents have their own.
-    bash_directory: dict[str | None, str | None] = {}
+    # A cd carries to the next Bash call in the main session only; a subagent's
+    # shell resets on every call.
+    main_directory: str | None = None
     for event in events:
         if event.get("type") == "system" and event.get("subtype") == "init":
             tools_available = event.get("tools", [])
         if event.get("type") != "assistant":
             continue
-        session = event.get("parent_tool_use_id")
+        in_subagent = event.get("parent_tool_use_id") is not None
         for block in event.get("message", {}).get("content", []):
             if block.get("type") != "tool_use":
                 continue
@@ -462,9 +487,11 @@ def summarize_trace(events: list[dict[str, Any]]) -> dict[str, Any]:
                 if match:
                     skill_files_read.append(posixpath.normpath(match.group(0)))
             elif block["name"] == "Bash":
-                paths, bash_directory[session] = bash_skill_paths(
-                    tool_input.get("command", ""), bash_directory.get(session)
+                paths, directory = bash_skill_paths(
+                    tool_input.get("command", ""), None if in_subagent else main_directory
                 )
+                if not in_subagent:
+                    main_directory = directory
                 skill_files_read.extend(paths)
     return {
         "skill_calls": skill_calls,
@@ -1105,27 +1132,37 @@ def print_dry_run(tasks: list[Task], replicates: int) -> None:
     print("Dry run: no agent or judge command was executed and no result file was written.")
 
 
-def tree_digest(files: Iterable[tuple[str, Path]]) -> str:
+def tree_digest(files: Iterable[tuple[str, bytes]]) -> str:
     """sha256 over (name, content) pairs in name order."""
     digest = hashlib.sha256()
-    for name, path in sorted(files):
-        digest.update(name.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
+    for name, content in sorted(files):
+        digest.update(name.encode() + b"\0" + hashlib.sha256(content).digest())
     return digest.hexdigest()
 
 
-def files_under(root: Path) -> list[tuple[str, Path]]:
-    return [(path.relative_to(root).as_posix(), path) for path in root.rglob("*") if path.is_file()]
+def files_under(root: Path) -> list[tuple[str, bytes]]:
+    """Files under root, without OS and bytecode litter that varies between machines."""
+    return [
+        (path.relative_to(root).as_posix(), path.read_bytes())
+        for path in root.rglob("*")
+        if path.is_file()
+        and path.name != ".DS_Store"
+        and path.suffix != ".pyc"
+        and "__pycache__" not in path.parts
+    ]
 
 
 def task_digest(task: Task) -> str:
-    files = [task.path, *([task.check_script] if task.check_script else [])]
+    # The rendered prompts, so a change to the prompt builder or slash prefix shows.
+    named = [(f"prompt/{arm}", make_agent_prompt(task, arm).encode()) for arm in ARM_NAMES]
+    files = [*([task.check_script] if task.check_script else [])]
     if task.battery == "ui":
         files.extend(UI_GATE_FILES)
-    named = [(path.relative_to(EVAL_DIR).as_posix(), path) for path in files]
+    named.extend((path.relative_to(EVAL_DIR).as_posix(), path.read_bytes()) for path in files)
     if task.fixture_repo is not None:
         named.extend(
-            (f"{task.fixture_repo.relative_to(EVAL_DIR).as_posix()}/{name}", path)
-            for name, path in files_under(task.fixture_repo)
+            (f"{task.fixture_repo.relative_to(EVAL_DIR).as_posix()}/{name}", content)
+            for name, content in files_under(task.fixture_repo)
         )
     return tree_digest(named)
 
@@ -1226,32 +1263,38 @@ def main(argv: list[str] | None = None) -> int:
             if metadata.get(field) != expected[field]:
                 parser.error(f"resume mismatch for {field}")
         # Arms from another config, task, model, CLI, or ceiling are not comparable.
-        if "fingerprint" not in metadata:
-            parser.error("resume refused: the run predates fingerprints, so its arms ran under other tools and prompts")
-        differences = fingerprint_differences(metadata["fingerprint"], fingerprint(tasks, args.model))
-        if differences:
-            parser.error(f"resume refused: fingerprint differs in {', '.join(differences)}")
+        # A rejudge run's arms are fixed; only its judging resumes.
+        if "rejudged_from" not in metadata:
+            if "fingerprint" not in metadata:
+                parser.error(
+                    "resume refused: the run predates fingerprints, so its arms ran under other tools and prompts"
+                )
+            differences = fingerprint_differences(metadata["fingerprint"], fingerprint(tasks, args.model))
+            if differences:
+                parser.error(f"resume refused: fingerprint differs in {', '.join(differences)}")
     else:
         if meta_path.exists() or journal_path.exists():
             parser.error(f"result id collision: {run_id}; retry in one second")
         metadata = metadata_for(run_id, args.battery, tasks, args.replicates, args.model)
         if args.rejudge:
-            # The arms, and so their fingerprint, belong to the source run.
+            source_meta_path = RESULTS_DIR / f"{args.rejudge}.meta.json"
+            source_journal_path = RESULTS_DIR / f"{args.rejudge}.records.jsonl"
+            if not source_meta_path.exists() or not source_journal_path.exists():
+                parser.error(f"rejudge source not found: {args.rejudge}")
+            source_meta = json.loads(source_meta_path.read_text(encoding="utf-8"))
+            for field in ("battery", "replicates", "task_ids"):
+                if source_meta.get(field) != metadata[field]:
+                    parser.error(f"rejudge mismatch for {field}")
+            # The arms, and so their model and fingerprint, belong to the source run.
             metadata["rejudged_from"] = args.rejudge
+            metadata["arm_model"] = source_meta["arm_model"]
+            metadata["fingerprint"] = source_meta.get("fingerprint")
         else:
             metadata["fingerprint"] = fingerprint(tasks, args.model)
         meta_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     journal = Journal(journal_path)
     if args.rejudge:
-        source_meta_path = RESULTS_DIR / f"{args.rejudge}.meta.json"
-        source_journal_path = RESULTS_DIR / f"{args.rejudge}.records.jsonl"
-        if not source_meta_path.exists() or not source_journal_path.exists():
-            parser.error(f"rejudge source not found: {args.rejudge}")
-        source_meta = json.loads(source_meta_path.read_text(encoding="utf-8"))
-        for field in ("battery", "replicates", "task_ids", "arm_model"):
-            if source_meta.get(field) != metadata[field]:
-                parser.error(f"rejudge mismatch for {field}")
-        for record in Journal(source_journal_path).records.values():
+        for record in Journal(RESULTS_DIR / f"{args.rejudge}.records.jsonl").records.values():
             if record["kind"] == "arm" and not journal.get(record["key"]):
                 journal.append(record)
 

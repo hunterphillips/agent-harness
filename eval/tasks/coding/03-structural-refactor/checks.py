@@ -31,7 +31,7 @@ def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, text=True, capture_output=True, check=True).stdout
 
 
-def status_paths(repo: Path) -> list[str]:
+def changed_paths(repo: Path) -> list[str]:
     # Against the fixture baseline, so unstaged, staged and committed work count alike.
     tracked = git(repo, "diff", "--name-only", "--no-renames", BASELINE_REF)
     untracked = git(repo, "ls-files", "--others", "--exclude-standard")
@@ -40,7 +40,7 @@ def status_paths(repo: Path) -> list[str]:
 
 def main() -> int:
     repo = Path(sys.argv[1]).resolve()
-    changed = status_paths(repo)
+    changed = changed_paths(repo)
     if changed != ["invoice/report.py"]:
         print(f"FAIL touched files: expected ['invoice/report.py'], got {changed}")
         return 1

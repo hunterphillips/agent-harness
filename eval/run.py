@@ -258,11 +258,13 @@ def initialize_repo(workspace: Path) -> None:
         handle.write("\n.claude/\n__pycache__/\n*.pyc\n.pytest_cache/\n.coverage\n")
 
 
-def deploy_configuration(workspace: Path) -> None:
+def deploy_configuration(workspace: Path, source: Path = ROOT) -> None:
+    """Copy the config from source (a checkout of this repo) into workspace/.claude.
+    settings.json is gitignored, so it always comes from this working tree."""
     target = workspace / ".claude"
     target.mkdir()
     for directory in ("agents", "skills", "output-styles"):
-        shutil.copytree(ROOT / directory, target / directory)
+        shutil.copytree(source / directory, target / directory)
     settings = json.loads((ROOT / "settings.json").read_text(encoding="utf-8"))
     settings["outputStyle"] = "Human Writer"
     (target / "settings.json").write_text(

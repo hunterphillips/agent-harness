@@ -1,4 +1,5 @@
 {
+  "kinds": ["cycle", "duplication", "complexity", "empty_catch", "test_without_assertions", "suppression", "unused_file", "other"],
   "defects": [
     {
       "id": 1,

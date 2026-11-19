@@ -35,6 +35,8 @@ EVAL_DIR = ROOT / "eval"
 RESULTS_DIR = EVAL_DIR / "results"
 ARM_NAMES = ("configured", "control")
 POSITIONS = (("configured", "control"), ("control", "configured"))
+# The fixture commit, kept as a ref so an arm amending that commit cannot move it.
+BASELINE_REF = "refs/eval/baseline"
 TOOL_FLAGS = ("--tools", "default", "--disallowedTools", "WebFetch,WebSearch")
 ARM_MODEL = "claude-opus-5"
 JUDGE_MODEL = "gpt-5.6-sol"
@@ -47,6 +49,8 @@ CLAUDE_LIMITS = {
 # Every UI task's checks.py delegates to these.
 UI_GATE_FILES = (EVAL_DIR / "tasks" / "ui" / "gate.py", EVAL_DIR / "tasks" / "ui" / "browser.cjs")
 SKILL_PATH = re.compile(r"\.claude/skills/[^\s'\"`;|&()<>]+")
+SKILL_DIRECTORY = re.compile(r"\.claude/skills(?:/\S*)?$")
+SKILL_FILE_EXTENSIONS = (".md", ".py", ".sh", ".csv", ".json", ".cjs")
 # This CLI names the subagent tool Task and accepts Agent as an alias.
 SUBAGENT_TOOLS = {"Agent", "Task"}
 # Identifying strings that must never reach the judge. Responses get them
@@ -228,6 +232,7 @@ def initialize_repo(workspace: Path) -> None:
     git(workspace, "config", "user.email", "eval@example.invalid")
     git(workspace, "add", ".")
     git(workspace, "commit", "-qm", "fixture baseline", "--allow-empty")
+    git(workspace, "update-ref", BASELINE_REF, "HEAD")
     exclude = workspace / ".git" / "info" / "exclude"
     with exclude.open("a", encoding="utf-8") as handle:
         handle.write("\n.claude/\n__pycache__/\n*.pyc\n.pytest_cache/\n.coverage\n")
@@ -311,22 +316,17 @@ def token_total(usage: dict[str, Any] | None) -> int | None:
     return int(sum(value for value in values if isinstance(value, (int, float))))
 
 
-def baseline_commit(workspace: Path) -> str:
-    """The root commit initialize_repo made, which an arm's own commits leave in place."""
-    return git(workspace, "rev-list", "--max-parents=0", "HEAD").split()[0]
-
-
 def changed_paths(workspace: Path) -> list[str]:
     # Against the baseline rather than HEAD, so unstaged, staged and committed
     # work are judged alike.
-    tracked = git(workspace, "diff", "--name-only", "--no-renames", baseline_commit(workspace), "--", ".")
+    tracked = git(workspace, "diff", "--name-only", "--no-renames", BASELINE_REF, "--", ".")
     untracked = git(workspace, "ls-files", "--others", "--exclude-standard")
     paths = set(tracked.splitlines()) | set(untracked.splitlines())
     return sorted(path for path in paths if path and not path.startswith(".claude/"))
 
 
 def collect_code_artifact(workspace: Path, gate: dict[str, Any], *, ui: bool = False) -> str:
-    patch = git(workspace, "diff", "--no-ext-diff", "--no-color", baseline_commit(workspace), "--", ".")
+    patch = git(workspace, "diff", "--no-ext-diff", "--no-color", BASELINE_REF, "--", ".")
     files = set(git(workspace, "ls-files").splitlines())
     files.update(changed_paths(workspace))
     sections: list[str] = []
@@ -408,18 +408,31 @@ def bash_skill_paths(command: str, directory: str | None) -> tuple[list[str], st
         if not words:
             continue
         if words[0] == "cd":
-            match = SKILL_PATH.search(words[1]) if len(words) > 1 else None
-            directory = match.group(0).rstrip("/") if match else None
+            target = words[1] if len(words) > 1 else ""
+            match = SKILL_DIRECTORY.search(target)
+            if match:
+                directory = posixpath.normpath(match.group(0))
+            elif directory and target and not target.startswith(("/", "~", "-")):
+                directory = in_skills_tree(posixpath.normpath(posixpath.join(directory, target)))
+            else:
+                directory = None
             continue
         for word in words[1:]:
             match = SKILL_PATH.search(word)
             if match:
-                paths.append(match.group(0))
-            elif directory and not word.startswith("-") and "." in posixpath.basename(word):
+                path = posixpath.normpath(match.group(0))
+            elif directory and not word.startswith("-"):
                 path = posixpath.normpath(posixpath.join(directory, word))
-                if path.startswith(".claude/skills/"):
-                    paths.append(path)
+            else:
+                continue
+            # Only file arguments count; directories and search patterns do not.
+            if in_skills_tree(path) and path.endswith(SKILL_FILE_EXTENSIONS):
+                paths.append(path)
     return paths, directory
+
+
+def in_skills_tree(path: str) -> str | None:
+    return path if path == ".claude/skills" or path.startswith(".claude/skills/") else None
 
 
 def summarize_trace(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -445,7 +458,9 @@ def summarize_trace(events: list[dict[str, Any]]) -> dict[str, Any]:
             elif block["name"] in SUBAGENT_TOOLS:
                 subagents += 1
             elif block["name"] == "Read":
-                skill_files_read.extend(SKILL_PATH.findall(tool_input.get("file_path", "")))
+                match = SKILL_PATH.search(tool_input.get("file_path", ""))
+                if match:
+                    skill_files_read.append(posixpath.normpath(match.group(0)))
             elif block["name"] == "Bash":
                 paths, bash_directory[session] = bash_skill_paths(
                     tool_input.get("command", ""), bash_directory.get(session)
@@ -863,12 +878,12 @@ def reconcile_replicate(
 
 
 def majority(values: Iterable[str]) -> str:
-    """The outcome of more than half the replicates; a split with no majority is a tie."""
+    """The outcome of more than half the replicates; no majority, or no replicates, is no verdict."""
     values = list(values)
-    for outcome in ("configured", "control", "no_verdict"):
+    for outcome in ("configured", "control", "tie"):
         if values.count(outcome) > len(values) / 2:
             return outcome
-    return "tie"
+    return "no_verdict"
 
 
 def metric_stats(records: list[dict[str, Any]], field: str) -> dict[str, float | int | None]:
@@ -965,7 +980,7 @@ def fmt_number(value: float | int | None, digits: int = 2) -> str:
 def loaded_summary(record: dict[str, Any]) -> list[str]:
     """Markdown cells for what one arm loaded; records journaled before tracing show n/a."""
     if "skill_files_read" not in record:
-        return ["n/a"] * 4
+        return ["n/a"] * 5
     files = record["skill_files_read"]
     distinct = list(dict.fromkeys(path.removeprefix(".claude/skills/") for path in files))
     return [
@@ -973,7 +988,23 @@ def loaded_summary(record: dict[str, Any]) -> list[str]:
         ", ".join(record["skill_calls"]) or "none",
         f"{len(files)}" + (f": {', '.join(distinct)}" if distinct else ""),
         str(record["subagents"]),
+        str(len(record["tools_available"])),
     ]
+
+
+def tool_difference(records: list[dict[str, Any]]) -> str | None:
+    """One line naming tools offered to one arm and not the other."""
+    tools = {arm: set() for arm in ARM_NAMES}
+    for record in records:
+        tools[record["arm"]].update(record.get("tools_available", []))
+    if not all(tools.values()):
+        return None
+    only = {arm: sorted(tools[arm] - tools[other]) for arm, other in (ARM_NAMES, ARM_NAMES[::-1])}
+    if not any(only.values()):
+        return "Same tools in both arms."
+    return " ".join(
+        f"Only {arm}: {', '.join(names)}." for arm, names in only.items() if names
+    )
 
 
 def markdown_summary(
@@ -1016,8 +1047,8 @@ def markdown_summary(
             "",
             "## What each arm loaded",
             "",
-            "| Task | Replicate | Arm | Slash command | Skill calls | Skill files read | Subagents |",
-            "| --- | ---: | --- | --- | --- | --- | ---: |",
+            "| Task | Replicate | Arm | Slash command | Skill calls | Skill files read | Subagents | Tools |",
+            "| --- | ---: | --- | --- | --- | --- | ---: | ---: |",
         ]
     )
     arm_records = sorted(
@@ -1027,6 +1058,9 @@ def markdown_summary(
     for record in arm_records:
         cells = [record["task_id"], str(record["replicate"]), record["arm"], *loaded_summary(record)]
         lines.append("| " + " | ".join(cells) + " |")
+    difference = tool_difference(arm_records)
+    if difference:
+        lines.extend(["", difference])
     lines.extend(
         [
             "",
@@ -1110,6 +1144,26 @@ def fingerprint(tasks: list[Task], model: str) -> dict[str, Any]:
     }
 
 
+def fingerprint_differences(stored: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    differences = [
+        label
+        for field, label in (
+            ("config_sha256", "config tree"),
+            ("model", "model"),
+            ("claude_version", "CLI version"),
+            ("tool_flags", "tool flags"),
+        )
+        if stored.get(field) != current[field]
+    ]
+    for task_id, entry in current["tasks"].items():
+        previous = stored.get("tasks", {}).get(task_id, {})
+        if previous.get("sha256") != entry["sha256"]:
+            differences.append(f"{task_id} prompt/fixture/checks")
+        if previous.get("ceilings") != entry["ceilings"]:
+            differences.append(f"{task_id} ceilings")
+    return differences
+
+
 def metadata_for(run_id: str, battery: str, tasks: list[Task], replicates: int, model: str) -> dict[str, Any]:
     return {
         "run_id": run_id,
@@ -1168,9 +1222,15 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"resume metadata not found: {meta_path}")
         metadata = json.loads(meta_path.read_text(encoding="utf-8"))
         expected = metadata_for(run_id, args.battery, tasks, args.replicates, args.model)
-        for field in ("battery", "replicates", "task_ids", "arm_model"):
+        for field in ("battery", "replicates", "task_ids"):
             if metadata.get(field) != expected[field]:
                 parser.error(f"resume mismatch for {field}")
+        # Arms from another config, task, model, CLI, or ceiling are not comparable.
+        if "fingerprint" not in metadata:
+            parser.error("resume refused: the run predates fingerprints, so its arms ran under other tools and prompts")
+        differences = fingerprint_differences(metadata["fingerprint"], fingerprint(tasks, args.model))
+        if differences:
+            parser.error(f"resume refused: fingerprint differs in {', '.join(differences)}")
     else:
         if meta_path.exists() or journal_path.exists():
             parser.error(f"result id collision: {run_id}; retry in one second")

@@ -7,17 +7,17 @@ import sys
 from pathlib import Path
 
 
+# Set by the runner's initialize_repo at the fixture commit.
+BASELINE_REF = "refs/eval/baseline"
+
+
 def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, text=True, capture_output=True, check=True).stdout
 
 
-def baseline_commit(repo: Path) -> str:
-    return git(repo, "rev-list", "--max-parents=0", "HEAD").split()[0]
-
-
 def changed_paths(repo: Path) -> list[str]:
     # Against the fixture baseline, so unstaged, staged and committed work count alike.
-    tracked = git(repo, "diff", "--name-only", "--no-renames", baseline_commit(repo))
+    tracked = git(repo, "diff", "--name-only", "--no-renames", BASELINE_REF)
     untracked = git(repo, "ls-files", "--others", "--exclude-standard")
     return sorted(set(tracked.splitlines()) | set(untracked.splitlines()))
 

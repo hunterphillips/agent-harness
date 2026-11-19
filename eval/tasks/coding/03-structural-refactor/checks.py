@@ -23,17 +23,17 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# Set by the runner's initialize_repo at the fixture commit.
+BASELINE_REF = "refs/eval/baseline"
+
+
 def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, text=True, capture_output=True, check=True).stdout
 
 
-def baseline_commit(repo: Path) -> str:
-    return git(repo, "rev-list", "--max-parents=0", "HEAD").split()[0]
-
-
 def status_paths(repo: Path) -> list[str]:
     # Against the fixture baseline, so unstaged, staged and committed work count alike.
-    tracked = git(repo, "diff", "--name-only", "--no-renames", baseline_commit(repo))
+    tracked = git(repo, "diff", "--name-only", "--no-renames", BASELINE_REF)
     untracked = git(repo, "ls-files", "--others", "--exclude-standard")
     return sorted(set(tracked.splitlines()) | set(untracked.splitlines()))
 
@@ -46,7 +46,7 @@ def main() -> int:
         return 1
 
     baseline_test = subprocess.run(
-        ["git", "show", f"{baseline_commit(repo)}:tests/test_report.py"],
+        ["git", "show", f"{BASELINE_REF}:tests/test_report.py"],
         cwd=repo,
         capture_output=True,
         check=True,

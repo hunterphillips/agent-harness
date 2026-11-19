@@ -62,3 +62,21 @@ Per task per replicate, budget for two Claude calls plus two judge calls with fo
 axe reports a 1:1 contrast ratio (white on white) as "incomplete", not a violation, so a passing gate does not prove readable contrast. Incomplete contrast findings are printed in the gate details for the judge to weigh.
 
 Results are directional. Published judge-versus-human agreement on web UI quality is about 70% ([WebDevJudge](https://arxiv.org/abs/2510.18560)); that is context, not a calibration of this judge. Use three replicates and document concrete failure instances with screenshots and the corresponding verdict, rather than relying on single-run win rates.
+
+## Audit
+
+`eval/tasks/audit/` checks the `architecture-audit` workflow on a seeded fixture, outside the three batteries. `seeded/build.py` writes a two-package TypeScript repository with eight planted defects and three clean controls. `seeded/seeds.json` names each by path and kind.
+
+`run_audit.py` builds the fixture in a temp directory, deploys the config into its `.claude/` from the working tree or from `--ref`, and runs `claude -p` with the configured arm's flags, 80 turns and $8. `settings.json` always comes from the working tree. The prompt runs the audit through `/coding` and asks for every finding in `audit-findings.json`. `check_report.py` passes a run that finds at least 7 of the 8 seeds by path and kind and puts no finding on a clean control or a directory that holds one. It does not score severity.
+
+```sh
+python3 eval/tasks/audit/test_metrics.py
+python3 eval/tasks/audit/test_check_report.py
+python3 eval/tasks/audit/run_audit.py eval/results/audit/new-1
+python3 eval/tasks/audit/run_audit.py --ref 9d7777c eval/results/audit/old-1
+python3 eval/tasks/audit/check_report.py eval/results/audit/new-1/audit-findings.json eval/tasks/audit/seeded/seeds.json
+```
+
+The output directory gets `events.jsonl`, `reply.md`, `audits/` (the report and `metrics.jsonl`), `audit-findings.json`, and `summary.json` with turns, cost, and whether the workflow file and `metrics.py` were used. A run costs about $1.50.
+
+Seed recall does not separate workflow versions. The prompt gives the agent the kind list the seeds were drawn from, and the workflow at `9d7777c` also found 8 of 8 in three runs; the two differed only in findings on clean controls (none in four runs of the current text, one to four per run at `9d7777c`). knip does not run in the fixture, which has no `node_modules`, and the fixture's tests cannot load, so the unused-code metrics and the test probe go unexercised.

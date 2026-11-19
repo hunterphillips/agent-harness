@@ -1,0 +1,73 @@
+{
+  "defects": [
+    {
+      "id": 1,
+      "kind": "cycle",
+      "paths": ["pkg-core/src/cart.ts", "pkg-core/src/inventory.ts"],
+      "note": "cart.ts imports inventory.ts through the @core/* tsconfig path alias; inventory.ts imports cart.ts back"
+    },
+    {
+      "id": 2,
+      "kind": "duplication",
+      "paths": ["pkg-core/src/report.ts", "pkg-core/src/invoice.ts", "pkg-web/src/summary.ts"],
+      "note": "summarizeTotals copied into three files"
+    },
+    {
+      "id": 3,
+      "kind": "complexity",
+      "paths": ["pkg-core/src/pricing.ts"],
+      "function": "priceOrder",
+      "ccn": 25,
+      "note": "the most-committed file"
+    },
+    {
+      "id": 4,
+      "kind": "empty_catch",
+      "paths": ["pkg-core/src/storage.ts"],
+      "line": 7,
+      "note": "empty catch around writeFileSync"
+    },
+    {
+      "id": 5,
+      "kind": "test_without_assertions",
+      "paths": ["pkg-core/test/cart.test.ts"]
+    },
+    {
+      "id": 6,
+      "kind": "suppression",
+      "paths": ["pkg-web/src/view.ts", "pkg-core/test/pricing.test.ts"],
+      "ts_ignore": 2,
+      "skipped_tests": 1,
+      "note": "two @ts-ignore comments in view.ts, one test.skip in pricing.test.ts"
+    },
+    {
+      "id": 7,
+      "kind": "unused_file",
+      "paths": ["pkg-core/src/unused.ts"],
+      "note": "exported, imported by nothing; only knip finds it, and knip needs node_modules"
+    },
+    {
+      "id": 8,
+      "kind": "duplication",
+      "paths": ["pkg-web/src/big-table.ts"],
+      "lines": 1228,
+      "note": "normalizeRows and normalizeColumns share a body inside a file over 1,000 lines"
+    }
+  ],
+  "controls": [
+    {
+      "kind": "clean_module",
+      "paths": ["pkg-core/src/clean.ts"]
+    },
+    {
+      "kind": "handled_catch",
+      "paths": ["pkg-core/src/safe-write.ts"],
+      "note": "logs, then rethrows with the cause"
+    },
+    {
+      "kind": "generated",
+      "paths": ["pkg-core/src/gen/orders.ts", "pkg-core/src/gen/invoices.ts"],
+      "note": "alike because both are generated; each starts with an @generated header"
+    }
+  ]
+}

@@ -2,6 +2,8 @@
 
 This runner compares the final artifacts from the repository configuration and a customization-free control. It uses blind pairwise Codex reviews in both A/B orders. Both arms run with `--setting-sources project`, so they load project settings only and a user-level hook, setting, or output style in `~/.claude` cannot contaminate an A/B result. Coding tasks run deterministic checks before qualitative review.
 
+The configured arm gets the repository's `skills/`, `agents/`, `output-styles/`, and `settings.json` in the workspace's `.claude/`; control runs with `--safe-mode`. Both arms get the CLI's default tool set minus `WebFetch` and `WebSearch`, and the same turn and budget ceilings. The configured arm's prompt starts with `/writing` for writing tasks and `/coding` for coding and UI tasks; control's prompt has no prefix.
+
 Requires Python 3.12, `git`, an authenticated `claude` CLI, and an authenticated `codex` CLI.
 
 ```sh
@@ -14,13 +16,22 @@ python eval/run.py --battery writing --task writing-01-rewrite-ai-draft --replic
 # Run a full battery (default: three replicates)
 python eval/run.py --battery writing
 python eval/run.py --battery coding
+
+# Run both arms on another model (default: claude-opus-5)
+python eval/run.py --battery coding --model claude-sonnet-5
 ```
 
-Interrupted runs leave a fsynced journal. Continue one with `python eval/run.py --battery writing --resume YYYYMMDD-HHMMSS` using the original task selection and replicate count.
+Interrupted runs leave a fsynced journal. Continue one with `python eval/run.py --battery writing --resume YYYYMMDD-HHMMSS` using the original task selection, replicate count, and `--model`.
 
-Results land in `eval/results/<timestamp>.json` and `.md`; `.meta.json` and `.records.jsonl` are recovery/audit files. The directory is gitignored.
+Results land in `eval/results/<timestamp>.json` and `.md`; `.meta.json` and `.records.jsonl` are recovery/audit files. The directory is gitignored. `.meta.json` holds a fingerprint of the run: hashes of the deployed `.claude/` tree and of each task's prompt, fixture, and checks, plus the model, `claude --version`, tool flags, and ceilings.
 
-Each replicate can make two Claude calls and two Codex judge calls. Coding cases with one passing deterministic gate skip both judge calls. The runner caps Claude calls at $1/$2 per writing control/configured run and $3/$6 per coding control/configured run; these are ceilings, not estimates. A default writing battery plans 60 Claude calls and 60 judge calls, so use a one-replicate, one-task smoke test before a full run. Efficiency metrics are reported separately and never affect quality verdicts.
+Each arm runs with `--output-format stream-json`, and its raw events are kept at `eval/results/<run-id>/<task>/<replicate>/<arm>/events.jsonl`. Each arm's journal record lists what it loaded: `slash_command`, `skill_calls` (Skill tool invocations), `skill_files_read` (paths under `.claude/skills/` in Read calls and Bash commands), `subagents` (subagent tool calls), and `tools_available` (from the session's init event). The `.md` summary shows these per arm. A slash command expands into the prompt, so `/coding` alone produces no Skill call.
+
+A replicate's verdict needs both judge orders to agree. When both agree there is no winner, the replicate is a `tie`. When a judge result is missing or the two orders disagree, it is `no_verdict`. A task's verdict is the outcome of more than half its replicates, or `tie` when none has a majority.
+
+Coding gates compare the workspace with the fixture's baseline commit, so unstaged, staged, and committed work are judged alike.
+
+Each replicate can make two Claude calls and two Codex judge calls. Coding cases with one passing deterministic gate skip both judge calls. Every arm is capped at 12 turns and $2 per writing run and 40 turns and $6 per coding or UI run (writing tasks that ship a repository get the coding ceilings); these are ceilings, not estimates. A default writing battery plans 60 Claude calls and 60 judge calls, so use a one-replicate, one-task smoke test before a full run. Efficiency metrics are reported separately and never affect quality verdicts.
 
 ## UI
 
@@ -38,7 +49,7 @@ python3 eval/run.py --battery ui --replicates 3
 
 The gate loads `index.html` directly through `file://` in headless Chromium at both widths. It requires an edited file and no console or uncaught JavaScript errors. Local axe-core 4.11.1 checks `color-contrast`, `button-name`, `link-name`, `label`, and `image-alt`; serious or critical violations fail. The local package avoids a CDN fetch for axe. Pages using Tailwind CDN or remote fonts still need network access. These checks establish floors, not aesthetics or full accessibility coverage.
 
-Per task per replicate, budget for two Claude calls plus two judge calls with four images per judge call. UI uses the coding Claude limits ($3 control / $6 configured); judge image tokens cost extra. Both label orders are judged even when only one UI gate passes. A screenshot render failure aborts the run before the arm is journaled, so `--resume` reruns that arm.
+Per task per replicate, budget for two Claude calls plus two judge calls with four images per judge call. UI uses the coding Claude limits; judge image tokens cost extra. Both label orders are judged even when only one UI gate passes. A screenshot render failure aborts the run before the arm is journaled, so `--resume` reruns that arm.
 
 axe reports a 1:1 contrast ratio (white on white) as "incomplete", not a violation, so a passing gate does not prove readable contrast. Incomplete contrast findings are printed in the gate details for the judge to weigh.
 

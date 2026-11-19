@@ -66,7 +66,7 @@ class UIJudgeTests(unittest.TestCase):
         self.assertEqual(result["overall"], "configured")
         self.assertEqual(result["basis"], "position_swap_agreement")
         judges[1]["verdict"]["overall"]["winner"] = "A"
-        self.assertEqual(run.reconcile_replicate(task, 1, arms, judges)["overall"], "tie")
+        self.assertEqual(run.reconcile_replicate(task, 1, arms, judges)["overall"], "no_verdict")
         self.assertEqual(run.reconcile_replicate(task, 1, arms, [])["basis"], "incomplete_judging")
 
 
